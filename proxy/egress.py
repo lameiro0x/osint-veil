@@ -31,6 +31,34 @@ class EgressViolation(RuntimeError):
     """Una herramienta intentó alcanzar al proveedor de IA. Bloqueado."""
 
 
+class EgressNotLocked(RuntimeError):
+    """Modo enforce activo pero el lockdown de red no está confirmado."""
+
+
+def preflight(*, mode: str, locked: bool) -> str | None:
+    """Comprobación previa al OSINT autónomo.
+
+    El software no puede verificar la política de red por sí mismo; lo que sí
+    puede es NEGARSE a lanzar el loop autónomo (que ejecuta herramientas) salvo
+    que el despliegue confirme que el lockdown de red está aplicado
+    (PROXY_EGRESS_LOCKED=1, lo pone deploy/egress_lockdown.sh / Docker).
+
+    - enforce + no locked -> EgressNotLocked (no arranca).
+    - warn    + no locked -> devuelve aviso (string).
+    - off / locked        -> None (ok).
+    """
+    if locked or mode == "off":
+        return None
+    if mode == "enforce":
+        raise EgressNotLocked(
+            "PROXY_EGRESS=enforce y el lockdown de red NO está confirmado "
+            "(PROXY_EGRESS_LOCKED!=1). Aplica deploy/egress_lockdown.sh y marca la "
+            "variable antes de lanzar OSINT autónomo."
+        )
+    return ("AVISO: egress no forzado (PROXY_EGRESS=warn). Una herramienta podría "
+            "abrir su propio socket hacia Anthropic. Usa 'enforce' + lockdown en producción.")
+
+
 def _host_of(target: str) -> str:
     if "://" in target:
         return (urlparse(target).hostname or "").lower()

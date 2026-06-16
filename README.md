@@ -237,6 +237,16 @@ Anthropic, pero la **garantía real es a nivel de red**: ejecuta
 `deploy/egress_lockdown.sh` para que solo el proceso del proxy pueda hablar con
 la API. Sin esto, un binario externo podría abrir su propio socket.
 
+Modos (`PROXY_EGRESS`):
+
+| Modo      | Comportamiento del OSINT autónomo                                        |
+| --------- | ------------------------------------------------------------------------ |
+| `off`     | No comprueba nada.                                                       |
+| `warn`    | Avisa en el log de que el egress no está forzado (por defecto).          |
+| `enforce` | **Se niega a arrancar** salvo que el lockdown de red esté confirmado (`PROXY_EGRESS_LOCKED=1`, lo pone el script de despliegue / Docker). |
+
+En producción: `PROXY_EGRESS=enforce` + `deploy/egress_lockdown.sh`.
+
 ## 9. Modos
 
 | Modo        | Comportamiento                                                         |
@@ -252,10 +262,12 @@ la API. Sin esto, un binario externo podría abrir su propio socket.
 `Cookie:` / `Set-Cookie:`, `client_secret=`, `password=`, `passwd=`,
 `access_token=`, `refresh_token=`, claves privadas PEM (`BEGIN … PRIVATE KEY`).
 
-**Identificadores (se tokenizan):** email → `EMAIL_001`, dominio → `DOMAIN_001`,
-subdominio → `SUBDOMAIN_001`, IP interna → `INTERNAL_IP_001`, IP pública →
-`PUBLIC_IP_001`, repositorio → `REPO_001`, URL privada → `URL_001`, GUID →
-`TENANT_ID_001`, ruta interna → `PATH_001`, palabra clave del caso → `KEYWORD_001`.
+**Identificadores (se tokenizan, con pista de relevancia):** email → `EMAIL_001`,
+dominio → `DOMAIN_001`, subdominio → `SUBDOMAIN_001`, IP interna →
+`INTERNAL_IP_001`, IP pública → `PUBLIC_IP_001`, repositorio → `REPO_001`, URL
+privada → `URL_001`, GUID → `APP_ID_001`/`TENANT_ID_001` (según contexto), cuenta
+de servicio → `SERVICE_ACCOUNT_001`, persona → `PERSON_001`, ruta interna →
+`PATH_001`, palabra clave del caso → `KEYWORD_001`.
 
 ## 11. Tests
 
@@ -270,11 +282,15 @@ tienen mappings separados; que `/privacy/sanitize` funciona; cifrado en reposo.
 
 ## 12. Limitaciones
 
-- **Nombres de persona y cuentas de servicio**: el spec los pide (`PERSON_001`,
-  `SERVICE_ACCOUNT_001`) pero detectarlos bien requiere NER. No están en el MVP.
-  *Workaround*: añádelos como `sensitive_keywords` en la config del caso. **(TODO)**
-- **Tenant ID vs App ID**: ambos son GUIDs y no se distinguen por forma. El MVP
-  tokeniza todo GUID como `TENANT_ID_001`. **(TODO: heurística por contexto)**
+- **Nombres de persona**: detección parcial. Se tokenizan los nombres listados en
+  `sensitive_names` (config del caso) y, si instalas spaCy + un modelo
+  (`pip install spacy && python -m spacy download es_core_news_sm`), también vía
+  NER automático (dependencia **opcional**, se activa sola si está). Sin spaCy,
+  solo los nombres conocidos. **Cuentas de servicio** sí se detectan
+  (`svc_*`, `DOMINIO\\usuario`, `*$`, etc.) → `SERVICE_ACCOUNT_001`.
+- **Tenant ID vs App ID**: ambos son GUIDs. Se distinguen por **contexto**
+  (palabras como `app`/`client_id` cerca → `APP_ID`, si no `TENANT_ID`). Heurística,
+  no infalible.
 - **`DOMAIN` vs `SUBDOMAIN`** se decide por número de etiquetas (≥3 = subdominio),
   no por TLDs compuestos (`co.uk`), así que algún `ejemplo.co.uk` se marcará como
   subdominio.

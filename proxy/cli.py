@@ -17,8 +17,10 @@ import argparse
 import sys
 
 from .claude_client import ClaudeClient
-from .config import get_case_config, get_settings
+from .config import get_case_config, get_settings, validate_settings
+from .egress import EgressNotLocked
 from .gateway import ToolGateway, builtin_tools
+from .logging_setup import setup_logging
 from .orchestrator import Budget, Orchestrator
 from .report import build_report, review_queue
 from .storage import CaseStore
@@ -26,8 +28,12 @@ from .storage import CaseStore
 
 def _cmd_audit(args) -> int:
     settings = get_settings()
-    if not settings.anthropic_api_key:
-        print("ERROR: ANTHROPIC_API_KEY no configurada (.env).", file=sys.stderr)
+    errors, warnings = validate_settings(settings, require_api_key=True)
+    for w in warnings:
+        print(f"⚠  {w}", file=sys.stderr)
+    if errors:
+        for e in errors:
+            print(f"✖  {e}", file=sys.stderr)
         return 2
 
     case = get_case_config(args.case)
@@ -44,7 +50,11 @@ def _cmd_audit(args) -> int:
 
     orch = Orchestrator(client=client, gateway=gateway, store=store, case=case,
                         target=args.target, budget=budget, model=case.model)
-    result = orch.run()
+    try:
+        result = orch.run()
+    except EgressNotLocked as e:
+        print(f"✖  {e}", file=sys.stderr)
+        return 3
 
     print(f"\n■ Fin: {result.stop_reason} | {result.iterations} iteraciones | "
           f"{result.total_tokens} tokens")
@@ -87,6 +97,7 @@ def _cmd_review(args) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    setup_logging()
     p = argparse.ArgumentParser(prog="proxy.cli", description="Privacy Gateway para OSINT con IA")
     sub = p.add_subparsers(dest="cmd", required=True)
 

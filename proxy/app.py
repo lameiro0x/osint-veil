@@ -12,15 +12,36 @@ from typing import Any
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
-from .config import Settings, get_case_config, get_settings
+import logging
+from contextlib import asynccontextmanager
+
+from .config import Settings, get_case_config, get_settings, validate_settings
 from .claude_client import ClaudeClient
+from .egress import EgressNotLocked
 from .gateway import ToolGateway, builtin_tools
+from .logging_setup import setup_logging
 from .orchestrator import Budget, Orchestrator
 from .report import build_report, review_queue
 from .sanitizer import Sanitizer
 from .storage import CaseStore
 
-app = FastAPI(title="Claude Privacy Proxy", version="0.1.0")
+_log = logging.getLogger("osint_veil.app")
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    setup_logging()
+    errors, warnings = validate_settings(require_api_key=False)
+    for w in warnings:
+        _log.warning(w)
+    for e in errors:
+        # No se aborta el arranque (las rutas autenticadas ya devuelven 503 con
+        # la clave por defecto), pero se avisa fuerte en el log.
+        _log.error("CONFIG: %s", e)
+    yield
+
+
+app = FastAPI(title="osint-veil", version="0.1.0", lifespan=_lifespan)
 
 
 # ── Autenticación local ──────────────────────────────────────────────
@@ -143,7 +164,10 @@ def osint_run(req: OsintRequest) -> dict[str, Any]:
         target=req.target, budget=Budget(max_iterations=req.max_iterations),
         model=case.model,
     )
-    result = orch.run()
+    try:
+        result = orch.run()
+    except EgressNotLocked as e:
+        raise HTTPException(status_code=409, detail=str(e))
     store.write_audit(type_counts=result.type_counts, provider=case.provider,
                       mode=case.mode, dry_run=False, note=f"osint stop={result.stop_reason}")
     # El análisis se devuelve TOKENIZADO. Rehidratar es decisión local del caso.

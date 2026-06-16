@@ -14,6 +14,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 VALID_MODES = {"strict", "balanced", "reporting"}
+VALID_EGRESS = {"off", "warn", "enforce"}
+
+
+class ConfigError(RuntimeError):
+    """Configuración inválida que impide arrancar de forma segura."""
 
 
 @dataclass
@@ -29,6 +34,8 @@ class Settings:
     encryption_key: str = ""
     default_mode: str = "strict"
     cases_path: Path = field(default_factory=lambda: Path("./cases"))
+    egress_mode: str = "warn"        # off | warn | enforce
+    egress_locked: bool = False      # lo pone el despliegue tras aplicar el lockdown de red
 
 
 @dataclass
@@ -42,6 +49,7 @@ class CaseConfig:
     rehydrate_output: bool = False
     sensitive_domains: list[str] = field(default_factory=list)
     sensitive_keywords: list[str] = field(default_factory=list)
+    sensitive_names: list[str] = field(default_factory=list)  # nombres de persona conocidos
 
 
 @lru_cache
@@ -49,6 +57,9 @@ def get_settings() -> Settings:
     mode = os.getenv("PROXY_MODE", "strict").strip().lower()
     if mode not in VALID_MODES:
         mode = "strict"
+    egress = os.getenv("PROXY_EGRESS", "warn").strip().lower()
+    if egress not in VALID_EGRESS:
+        egress = "warn"
     return Settings(
         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", "").strip(),
         anthropic_base_url=os.getenv("ANTHROPIC_BASE_URL", "https://api.anthropic.com").strip(),
@@ -59,7 +70,36 @@ def get_settings() -> Settings:
         encryption_key=os.getenv("PROXY_ENCRYPTION_KEY", "").strip(),
         default_mode=mode,
         cases_path=Path(os.getenv("PROXY_CASES_PATH", "./cases")),
+        egress_mode=egress,
+        egress_locked=os.getenv("PROXY_EGRESS_LOCKED", "0").strip() == "1",
     )
+
+
+def validate_settings(settings: Settings | None = None, *, require_api_key: bool = False
+                      ) -> tuple[list[str], list[str]]:
+    """Valida la config. Devuelve (errores_duros, avisos).
+
+    Errores duros = no arrancar de forma segura. Avisos = degradación aceptable.
+    """
+    s = settings or get_settings()
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    if s.proxy_local_api_key in ("", "change-me"):
+        errors.append("PROXY_LOCAL_API_KEY sigue siendo el valor por defecto. "
+                      "Cámbiala por una clave larga y aleatoria.")
+    if require_api_key and not s.anthropic_api_key:
+        errors.append("ANTHROPIC_API_KEY no configurada (necesaria para llamar a Claude).")
+    if not s.encryption_key:
+        warnings.append("PROXY_ENCRYPTION_KEY vacía: el vault se guarda EN CLARO. "
+                        "Genera una con 'python -m proxy.keygen'.")
+    if s.egress_mode == "enforce" and not s.egress_locked:
+        warnings.append("PROXY_EGRESS=enforce pero PROXY_EGRESS_LOCKED!=1: el OSINT "
+                        "autónomo se negará a arrancar hasta aplicar el lockdown de red.")
+    elif s.egress_mode != "enforce":
+        warnings.append(f"PROXY_EGRESS={s.egress_mode}: el egress no se fuerza. En "
+                        "producción usa 'enforce' + deploy/egress_lockdown.sh.")
+    return errors, warnings
 
 
 def _load_case_file(path: Path) -> dict:
@@ -95,4 +135,5 @@ def get_case_config(case_id: str) -> CaseConfig:
         rehydrate_output=bool(raw.get("rehydrate_output", False)),
         sensitive_domains=[str(d).lower() for d in raw.get("sensitive_domains", [])],
         sensitive_keywords=[str(k) for k in raw.get("sensitive_keywords", [])],
+        sensitive_names=[str(n) for n in raw.get("sensitive_names", [])],
     )

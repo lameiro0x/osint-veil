@@ -44,6 +44,41 @@ _HOST = re.compile(r"\b(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA
 _PATH_UNIX = re.compile(r"(?<![\w./])(?:/[A-Za-z0-9._-]+){2,}/?")
 _PATH_WIN = re.compile(r"\b[A-Za-z]:\\(?:[^\s\\\"']+\\?)+")
 
+# Cuentas de servicio (se tokenizan como SERVICE_ACCOUNT).
+_SERVICE_ACCOUNT = [
+    re.compile(r"\b[A-Za-z0-9_-]{2,}\\[A-Za-z0-9._$-]+"),          # DOMINIO\usuario
+    re.compile(r"\b(?:svc|srv|sa|service)[._-][A-Za-z0-9._-]+", re.IGNORECASE),
+    re.compile(r"\b[A-Za-z0-9._-]+[._-]svc\b", re.IGNORECASE),
+    re.compile(r"\b[A-Za-z0-9._-]{2,}\$"),                          # cuenta de máquina / gMSA$
+]
+# Pistas de contexto para distinguir App ID de Tenant ID.
+_APP_CONTEXT = re.compile(r"(app|application|client[_ -]?id|appid)", re.IGNORECASE)
+# Forma de un token ya generado (p.ej. SERVICE_ACCOUNT_001) — para no re-tokenizarlo.
+_TOKEN_SHAPE = re.compile(r"^[A-Z][A-Z_]*_\d{3,}$")
+
+
+_SPACY_NLP = None  # caché del modelo NER (carga perezosa, una vez)
+_SPACY_TRIED = False
+
+
+def _load_spacy():
+    """Carga spaCy + un modelo si están disponibles. None si no lo están."""
+    global _SPACY_NLP, _SPACY_TRIED
+    if _SPACY_TRIED:
+        return _SPACY_NLP
+    _SPACY_TRIED = True
+    try:
+        import spacy  # type: ignore
+        for model in ("es_core_news_sm", "en_core_web_sm"):
+            try:
+                _SPACY_NLP = spacy.load(model, disable=["lemmatizer", "tagger", "parser"])
+                break
+            except Exception:  # noqa: BLE001
+                continue
+    except Exception:  # noqa: BLE001 — spaCy no instalado: NER opcional desactivado
+        _SPACY_NLP = None
+    return _SPACY_NLP
+
 
 @dataclass
 class SanitizeResult:
@@ -78,6 +113,26 @@ class Sanitizer:
             result.annotations[token] = stored_hint
         return token
 
+    def _ner_persons(self, result: SanitizeResult, text: str) -> str:
+        """Tokeniza nombres de persona vía spaCy si está instalado. Si no, no-op.
+
+        Dependencia OPCIONAL (no en requirements). Para activarlo:
+            pip install spacy && python -m spacy download es_core_news_sm
+        """
+        nlp = _load_spacy()
+        if nlp is None or not text.strip():
+            return text
+        try:
+            doc = nlp(text)
+        except Exception:  # noqa: BLE001 — NER nunca debe romper el pipeline
+            return text
+        # Reemplaza de derecha a izquierda para no descuadrar offsets.
+        persons = [e for e in doc.ents if e.label_ in ("PER", "PERSON")]
+        for ent in sorted(persons, key=lambda e: e.start_char, reverse=True):
+            token = self._tokenize(result, "PERSON", ent.text)
+            text = text[:ent.start_char] + token + text[ent.end_char:]
+        return text
+
     def _is_sensitive_host(self, host: str) -> bool:
         host = host.lower()
         return any(host == d or host.endswith("." + d) for d in self.case.sensitive_domains)
@@ -109,10 +164,30 @@ class Sanitizer:
         result.sanitized_text = _URL.sub(
             lambda m: self._tokenize(result, "URL", m.group(0)), result.sanitized_text
         )
-        # 5. GUIDs.
-        result.sanitized_text = _GUID.sub(
-            lambda m: self._tokenize(result, "TENANT_ID", m.group(0)), result.sanitized_text
-        )
+        # 5a. Cuentas de servicio (antes de hosts/GUID para reclamarlas).
+        def _svc_sub(m: re.Match) -> str:
+            if _TOKEN_SHAPE.match(m.group(0)):  # no re-tokenizar un token ya creado
+                return m.group(0)
+            return self._tokenize(result, "SERVICE_ACCOUNT", m.group(0))
+        for pat in _SERVICE_ACCOUNT:
+            result.sanitized_text = pat.sub(_svc_sub, result.sanitized_text)
+        # 5b. Nombres de persona conocidos (config) + NER opcional (spaCy).
+        for name in self.case.sensitive_names:
+            if not name:
+                continue
+            pat = re.compile(rf"\b{re.escape(name)}\b", re.IGNORECASE)
+            result.sanitized_text = pat.sub(
+                lambda m: self._tokenize(result, "PERSON", m.group(0)), result.sanitized_text
+            )
+        result.sanitized_text = self._ner_persons(result, result.sanitized_text)
+
+        # 5c. GUIDs: App ID si hay contexto de "app/client_id" cerca, si no Tenant ID.
+        def _guid_sub(m: re.Match) -> str:
+            prefix = m.string[max(0, m.start() - 30):m.start()]
+            type_name = "APP_ID" if _APP_CONTEXT.search(prefix) else "TENANT_ID"
+            return self._tokenize(result, type_name, m.group(0))
+        result.sanitized_text = _GUID.sub(_guid_sub, result.sanitized_text)
+
         # 6. Dominios / subdominios.
         result.sanitized_text = _HOST.sub(self._host_sub(result), result.sanitized_text)
         # 7. IPs.

@@ -19,11 +19,16 @@ import time
 from dataclasses import dataclass, field, replace
 from typing import Protocol
 
-from .config import CaseConfig
+import logging
+
+from . import egress
+from .config import CaseConfig, get_settings
 from .gateway import ScopeError, ToolGateway, ToolNotAllowed
 from .sanitizer import Sanitizer
 from .secrets import scrub_secrets
 from .storage import CaseStore
+
+_log = logging.getLogger("osint_veil.orchestrator")
 
 SYSTEM_PROMPT = """Eres un analista de seguridad que dirige un OSINT/auditoría \
 autorizada sobre un objetivo concreto.
@@ -109,6 +114,12 @@ class Orchestrator:
         return safe, counts
 
     def run(self) -> OrchestratorResult:
+        # Preflight de egress: en enforce, se niega a correr sin lockdown de red.
+        s = get_settings()
+        warning = egress.preflight(mode=s.egress_mode, locked=s.egress_locked)
+        if warning:
+            _log.warning(warning)
+
         messages: list[dict] = [{
             "role": "user",
             "content": f"Realiza un OSINT del objetivo autorizado: {self.target}. "
