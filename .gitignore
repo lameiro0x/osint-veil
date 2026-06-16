@@ -1,0 +1,36 @@
+# Secretos y datos locales — NUNCA subir.
+.env
+.env.*
+!.env.example
+proxy_data/
+*.enc
+
+# Casos reales de clientes (pueden contener dominios/keywords sensibles).
+# Se versiona solo el ejemplo.
+cases/*.yaml
+cases/*.yml
+cases/*.json
+!cases/cliente_a_2026.yaml
+
+# Informes generados (rehidratados en local = datos reales).
+informe_*.md
+*.report.md
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Editores / SO
+.vscode/
+.idea/
+.DS_Store
+*.swp

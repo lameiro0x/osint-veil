@@ -1,0 +1,20 @@
+case_id: cliente_a_2026
+provider: claude
+model: claude-sonnet-4-6
+mode: strict
+rehydrate_output: false
+
+sensitive_domains:
+  - cliente.com
+  - cliente.local
+  - corp.cliente.com
+
+sensitive_keywords:
+  - vpn
+  - intranet
+  - scannerprint
+  - erpmail
+  - payroll
+  - admin
+  - backup
+  - dev
