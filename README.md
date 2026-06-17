@@ -227,7 +227,14 @@ python -m proxy.cli report --case cliente_a_2026
 
 # Ver la cola de revisión (hallazgos de alta relevancia)
 python -m proxy.cli review --case cliente_a_2026
+
+# Listar herramientas OSINT disponibles
+python -m proxy.cli tools [--allow-active]
 ```
+
+La CLI usa [rich](https://github.com/Textualize/rich): paneles, progreso del loop
+en vivo, tablas de hallazgos/cola de revisión/censura y el análisis renderizado en
+Markdown. Tras `pip install -e .` el comando es `osint-veil`.
 
 Herramientas integradas sin dependencias (`dns_resolve`, `http_headers`). Además,
 **wrappers opcionales de binarios** se activan solos si están instalados:

@@ -40,6 +40,14 @@ def test_review_queue_alta_relevancia():
     assert "relevancia: alta" in hints
 
 
+def test_cli_tools(capsys):
+    rc = main(["tools"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "dns_resolve" in out
+    assert "http_headers" in out
+
+
 def test_cli_review(capsys):
     case = get_case_config("cliente_a_2026")
     case_id = f"clirev-{uuid.uuid4().hex[:8]}"

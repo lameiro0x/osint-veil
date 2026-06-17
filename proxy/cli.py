@@ -1,20 +1,20 @@
-"""CLI del Privacy Gateway.
+"""CLI del Privacy Gateway (osint-veil), con interfaz rich.
 
-Ejemplos:
-    # Lanzar un OSINT autónomo y seguro:
-    python -m proxy.cli audit --case cliente_a_2026 --target cliente.com
-
-    # Regenerar el informe local de un caso:
-    python -m proxy.cli report --case cliente_a_2026
-
-    # Ver la cola de revisión (alta relevancia):
-    python -m proxy.cli review --case cliente_a_2026
+Comandos:
+    osint-veil audit   --case C --target dominio.com [--allow-active]
+    osint-veil report  --case C [--anon]
+    osint-veil review  --case C
+    osint-veil tools   [--allow-active]
 """
 
 from __future__ import annotations
 
 import argparse
-import sys
+
+from rich.console import Console
+from rich.markdown import Markdown
+from rich.panel import Panel
+from rich.table import Table
 
 from .claude_client import ClaudeClient
 from .config import get_case_config, get_settings, validate_settings
@@ -26,50 +26,95 @@ from .report import build_report, review_queue
 from .storage import CaseStore
 from .tools_external import external_tools
 
+console = Console()
+err = Console(stderr=True)
+
+# Paleta
+C_OK, C_BAD, C_DIM, C_ACCENT = "green", "red", "dim", "cyan"
+
+
+def _counts_table(counts: dict[str, int], title: str) -> Table:
+    t = Table(title=title, title_style="bold", show_edge=True, expand=False)
+    t.add_column("Tipo", style=C_ACCENT, overflow="fold")
+    t.add_column("Censurado", justify="right")
+    for k, v in sorted(counts.items()):
+        t.add_row(k, str(v))
+    if not counts:
+        t.add_row("—", "0")
+    return t
+
 
 def _cmd_audit(args) -> int:
     settings = get_settings()
     errors, warnings = validate_settings(settings, require_api_key=True)
     for w in warnings:
-        print(f"⚠  {w}", file=sys.stderr)
+        err.print(f"[yellow]⚠[/]  {w}")
     if errors:
         for e in errors:
-            print(f"✖  {e}", file=sys.stderr)
+            err.print(f"[red]✖[/]  {e}")
         return 2
 
     case = get_case_config(args.case)
     store = CaseStore(args.case)
     tools = builtin_tools() + external_tools(allow_active=args.allow_active)
     gateway = ToolGateway(scope_domains=[args.target] + (args.scope or []), tools=tools)
-    client = ClaudeClient(settings)
     budget = Budget(max_iterations=args.max_iter)
 
-    print(f"▶ OSINT de {args.target} | caso {args.case} | modo {case.mode}")
-    print(f"  herramientas: {[t['name'] for t in gateway.anthropic_tools()]}")
-    print(f"  límites: {budget.max_iterations} iteraciones, "
-          f"{budget.max_total_tokens} tokens, {budget.max_seconds:.0f}s\n")
+    console.print(Panel.fit(
+        f"[bold]Objetivo:[/] {args.target}\n"
+        f"[bold]Caso:[/] {args.case}    [bold]Modo:[/] {case.mode}\n"
+        f"[bold]Herramientas:[/] {', '.join(gateway.tool_names())}\n"
+        f"[bold]Límites:[/] {budget.max_iterations} iter · "
+        f"{budget.max_total_tokens} tokens · {budget.max_seconds:.0f}s"
+        + ("    [red](herramientas activas habilitadas)[/]" if args.allow_active else ""),
+        title="🛡  osint-veil — OSINT seguro", border_style=C_ACCENT,
+    ))
 
-    orch = Orchestrator(client=client, gateway=gateway, store=store, case=case,
-                        target=args.target, budget=budget, model=case.model)
+    def progress(ev: dict) -> None:
+        kind = ev.get("event")
+        if kind == "iteration":
+            console.print(f"[{C_DIM}]›[/] iteración [bold]{ev['n']}[/]/{ev['max']}")
+        elif kind == "tool":
+            mark = f"[{C_OK}]✓[/]" if ev.get("ok") else f"[{C_BAD}]✗[/]"
+            console.print(f"   {mark} [{C_ACCENT}]{ev.get('tool')}[/]")
+
+    orch = Orchestrator(client=ClaudeClient(settings), gateway=gateway, store=store,
+                        case=case, target=args.target, budget=budget, model=case.model,
+                        progress=progress)
     try:
-        result = orch.run()
+        with console.status("[bold green]Claude trabajando…", spinner="dots"):
+            result = orch.run()
     except EgressNotLocked as e:
-        print(f"✖  {e}", file=sys.stderr)
+        err.print(f"[red]✖[/]  {e}")
         return 3
-
-    print(f"\n■ Fin: {result.stop_reason} | {result.iterations} iteraciones | "
-          f"{result.total_tokens} tokens")
-    print(f"  llamadas a herramientas: {len(result.tool_calls)}")
-    print(f"  censurado: {result.type_counts}")
 
     store.write_audit(type_counts=result.type_counts, provider=case.provider,
                       mode=case.mode, dry_run=False, note=f"audit stop={result.stop_reason}")
+
+    color = C_OK if result.stop_reason == "completed" else "yellow"
+    console.print(Panel.fit(
+        f"[bold]Estado:[/] [{color}]{result.stop_reason}[/]\n"
+        f"[bold]Iteraciones:[/] {result.iterations}    "
+        f"[bold]Tokens:[/] {result.total_tokens}    "
+        f"[bold]Herramientas usadas:[/] {len(result.tool_calls)}",
+        title="Resumen", border_style=color,
+    ))
+    console.print(_counts_table(result.type_counts, "Privacidad — qué se censuró"))
 
     report = build_report(store, case, analysis=result.final_text, rehydrate=True)
     out = args.report or f"informe_{args.case}.md"
     with open(out, "w", encoding="utf-8") as f:
         f.write(report)
-    print(f"\n✔ Informe (rehidratado, LOCAL) escrito en: {out}")
+
+    if result.final_text:
+        analysis = store.rehydrate(result.final_text)
+        try:
+            console.print(Panel(Markdown(analysis),
+                                title="Análisis (rehidratado · LOCAL)", border_style=C_DIM))
+        except Exception:  # noqa: BLE001 — markdown malformado: fallback a texto plano
+            console.print(Panel(analysis,
+                                title="Análisis (rehidratado · LOCAL)", border_style=C_DIM))
+    console.print(f"[{C_OK}]✔[/] Informe (rehidratado, LOCAL) → [bold]{out}[/]")
     return 0
 
 
@@ -80,7 +125,8 @@ def _cmd_report(args) -> int:
     out = args.report or f"informe_{args.case}.md"
     with open(out, "w", encoding="utf-8") as f:
         f.write(report)
-    print(f"✔ Informe escrito en: {out}")
+    console.print(f"[{C_OK}]✔[/] Informe escrito en [bold]{out}[/] "
+                  f"({'anonimizado' if args.anon else 'rehidratado, LOCAL'})")
     return 0
 
 
@@ -88,18 +134,42 @@ def _cmd_review(args) -> int:
     store = CaseStore(args.case)
     items = review_queue(store)
     if not items:
-        print("Cola de revisión vacía.")
+        console.print("[dim]Cola de revisión vacía.[/]")
         return 0
-    print(f"Cola de revisión ({len(items)} de alta relevancia):")
+    t = Table(title=f"Cola de revisión — {len(items)} de alta relevancia",
+              title_style="bold", show_lines=False)
+    t.add_column("Token", style=C_ACCENT, overflow="fold")
+    t.add_column("Valor real (LOCAL)", style="bold", overflow="fold")
+    t.add_column("Pista", style=C_DIM, overflow="fold")
     for it in items:
         real = store.mappings.get(it["token"], it["token"])
-        print(f"  - {it['token']} = {real}  [{it['hint']}]")
+        t.add_row(it["token"], real, it["hint"])
+    console.print(t)
+    return 0
+
+
+def _cmd_tools(args) -> int:
+    builtin = builtin_tools()
+    ext = external_tools(allow_active=args.allow_active)
+    t = Table(title="Herramientas disponibles", title_style="bold")
+    t.add_column("Herramienta", style=C_ACCENT, overflow="fold")
+    t.add_column("Tipo")
+    t.add_column("Descripción", overflow="fold")
+    for spec in builtin:
+        t.add_row(spec.name, "integrada", spec.description)
+    for spec in ext:
+        t.add_row(spec.name, "[yellow]externa[/]", spec.description)
+    console.print(t)
+    if not args.allow_active:
+        console.print("[dim]Sugerencia: usa --allow-active para incluir nmap/amass-active "
+                      "(intrusivas).[/]")
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     setup_logging()
-    p = argparse.ArgumentParser(prog="proxy.cli", description="Privacy Gateway para OSINT con IA")
+    p = argparse.ArgumentParser(prog="osint-veil",
+                                description="Privacy Gateway para OSINT con IA")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     a = sub.add_parser("audit", help="Lanza un OSINT autónomo y seguro")
@@ -121,6 +191,10 @@ def main(argv: list[str] | None = None) -> int:
     rv = sub.add_parser("review", help="Muestra la cola de revisión (alta relevancia)")
     rv.add_argument("--case", required=True)
     rv.set_defaults(func=_cmd_review)
+
+    tl = sub.add_parser("tools", help="Lista las herramientas OSINT disponibles")
+    tl.add_argument("--allow-active", action="store_true")
+    tl.set_defaults(func=_cmd_tools)
 
     args = p.parse_args(argv)
     return args.func(args)
