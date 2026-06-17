@@ -67,7 +67,8 @@ class PolicyEngine:
     def mode(self) -> str:
         return self.case.mode
 
-    def should_tokenize(self, type_name: str, value: str, *, is_sensitive_host: bool = False) -> bool:
+    def should_tokenize(self, type_name: str, value: str, *,
+                        is_sensitive_host: bool = False) -> bool:
         """¿Este dato debe tokenizarse (True) o puede pasar en claro (False)?
 
         Los secretos no llegan aquí (se destruyen antes). DOMAIN/SUBDOMAIN y

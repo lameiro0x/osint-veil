@@ -10,7 +10,7 @@ las equivalencias en local (cifradas) y envía a Claude **solo una versión segu
 
 <p align="left">
   <img alt="Python" src="https://img.shields.io/badge/python-3.10%2B-blue">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-48%20passing-brightgreen">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-67%20passing-brightgreen">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-lightgrey">
   <img alt="Status" src="https://img.shields.io/badge/status-MVP-orange">
 </p>
@@ -210,7 +210,10 @@ curl -X POST http://127.0.0.1:8000/v1/chat/completions \
 | `GET /privacy/mappings/{case_id}`     | Mappings del caso (solo en local).                   |
 | `GET /privacy/audit-log/{case_id}`    | Qué tipos se censuraron y cuántas veces.             |
 | `GET /privacy/review-queue/{case_id}` | Hallazgos de alta relevancia (revisión no bloqueante).|
-| `POST /osint/run`                     | Lanza un OSINT autónomo y seguro (loop client-side). |
+| `POST /osint/run`                     | OSINT autónomo y seguro, **síncrono** (loop client-side). |
+| `POST /osint/jobs`                    | OSINT en **background**; devuelve `job_id` (no bloquea). |
+| `GET /osint/jobs/{job_id}`            | Estado + eventos + resultado del job.                |
+| `GET /osint/jobs/{job_id}/events`     | **Progreso en vivo** vía SSE.                        |
 | `GET /osint/report/{case_id}`         | Informe en Markdown (`?rehydrate=true` solo local).  |
 
 ## CLI (uso recomendado para auditorías)
@@ -226,9 +229,21 @@ python -m proxy.cli report --case cliente_a_2026
 python -m proxy.cli review --case cliente_a_2026
 ```
 
-Las herramientas OSINT integradas son pasivas y sin binarios externos
-(`dns_resolve`, `http_headers`). Añade las tuyas (amass, nmap…) registrando un
-`ToolSpec` en `proxy/gateway.py`.
+Herramientas integradas sin dependencias (`dns_resolve`, `http_headers`). Además,
+**wrappers opcionales de binarios** se activan solos si están instalados:
+pasivos (`subfinder`, `amass`, `whois`) y, con `--allow-active`, activos/intrusivos
+(`nmap`, `amass -active`). Las activas solo bajo autorización del objetivo.
+
+```bash
+osint-veil audit --case c --target cliente.com --allow-active   # incluye nmap si está
+```
+
+**Despliegue (Docker, egress real, ZDR):** ver [`docs/DEPLOY.md`](docs/DEPLOY.md).
+
+```bash
+pip install -e .            # instala el CLI 'osint-veil'
+# o:  docker compose up --build
+```
 
 ## Egress control (obligatorio en producción)
 

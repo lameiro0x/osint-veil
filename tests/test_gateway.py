@@ -1,6 +1,5 @@
 """Tests del Tool Gateway y del egress control (software)."""
 
-import uuid
 
 import pytest
 

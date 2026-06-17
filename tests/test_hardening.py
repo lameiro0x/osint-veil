@@ -56,8 +56,9 @@ def test_filtro_redacta_secretos_en_logs():
 
 # ── detección nueva ───────────────────────────────────────────────────
 def _san(names=None):
-    from proxy.config import get_case_config
     from dataclasses import replace
+
+    from proxy.config import get_case_config
     case = replace(get_case_config("cliente_a_2026"), sensitive_names=names or [])
     store = CaseStore(f"hard-{uuid.uuid4().hex[:8]}")
     return Sanitizer(store, case), store

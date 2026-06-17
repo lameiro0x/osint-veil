@@ -5,25 +5,29 @@ Regla de oro: nada llega a Claude sin pasar antes por el sanitizador.
 
 from __future__ import annotations
 
+import asyncio
+import json
+import logging
 import time
 import uuid
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException
-from pydantic import BaseModel, Field
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
-import logging
-from contextlib import asynccontextmanager
-
-from .config import Settings, get_case_config, get_settings, validate_settings
 from .claude_client import ClaudeClient
+from .config import Settings, get_case_config, get_settings, validate_settings
 from .egress import EgressNotLocked
 from .gateway import ToolGateway, builtin_tools
+from .jobs import manager as job_manager
 from .logging_setup import setup_logging
 from .orchestrator import Budget, Orchestrator
 from .report import build_report, review_queue
 from .sanitizer import Sanitizer
 from .storage import CaseStore
+from .tools_external import external_tools
 
 _log = logging.getLogger("osint_veil.app")
 
@@ -94,6 +98,7 @@ class OsintRequest(BaseModel):
     target: str
     scope: list[str] = []
     max_iterations: int = 12
+    allow_active: bool = False  # habilita herramientas activas/intrusivas (nmap...)
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────
@@ -158,7 +163,8 @@ def osint_run(req: OsintRequest) -> dict[str, Any]:
     case_id = _resolve_case_id(req.case_id)
     case = get_case_config(case_id)
     store = CaseStore(case_id)
-    gateway = ToolGateway(scope_domains=[req.target] + req.scope, tools=builtin_tools())
+    tools = builtin_tools() + external_tools(allow_active=req.allow_active)
+    gateway = ToolGateway(scope_domains=[req.target] + req.scope, tools=tools)
     orch = Orchestrator(
         client=ClaudeClient(settings), gateway=gateway, store=store, case=case,
         target=req.target, budget=Budget(max_iterations=req.max_iterations),
@@ -167,7 +173,7 @@ def osint_run(req: OsintRequest) -> dict[str, Any]:
     try:
         result = orch.run()
     except EgressNotLocked as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e)) from e
     store.write_audit(type_counts=result.type_counts, provider=case.provider,
                       mode=case.mode, dry_run=False, note=f"osint stop={result.stop_reason}")
     # El análisis se devuelve TOKENIZADO. Rehidratar es decisión local del caso.
@@ -198,6 +204,53 @@ def osint_report(case_id: str, rehydrate: bool = False, force: bool = False) -> 
         )
     md = build_report(store, case, analysis="", rehydrate=rehydrate)
     return {"case_id": case_id, "rehydrated": rehydrate, "report_markdown": md}
+
+
+@app.post("/osint/jobs", dependencies=[Depends(require_local_key)])
+def osint_job_start(req: OsintRequest) -> dict[str, Any]:
+    """Inicia un OSINT en background y devuelve un job_id (no bloquea)."""
+    settings = get_settings()
+    if not settings.anthropic_api_key:
+        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY no configurada.")
+    case_id = _resolve_case_id(req.case_id)
+    job = job_manager.start(case_id=case_id, target=req.target, scope=req.scope,
+                            max_iterations=req.max_iterations, allow_active=req.allow_active)
+    return {"job_id": job.id, "status": job.status, "case_id": case_id}
+
+
+@app.get("/osint/jobs/{job_id}", dependencies=[Depends(require_local_key)])
+def osint_job_status(job_id: str) -> dict[str, Any]:
+    snap = job_manager.snapshot(job_id)
+    if not snap:
+        raise HTTPException(status_code=404, detail="job no encontrado")
+    return {"job_id": snap["id"], "status": snap["status"], "events": snap["events"],
+            "result": snap["result"], "error": snap["error"]}
+
+
+@app.get("/osint/jobs/{job_id}/events", dependencies=[Depends(require_local_key)])
+async def osint_job_events(job_id: str) -> StreamingResponse:
+    """Progreso en vivo del job vía SSE (Server-Sent Events)."""
+    if not job_manager.snapshot(job_id):
+        raise HTTPException(status_code=404, detail="job no encontrado")
+
+    async def gen():
+        idx = 0
+        while True:
+            snap = job_manager.snapshot(job_id)
+            if snap is None:
+                break
+            events = snap["events"]
+            for ev in events[idx:]:
+                yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+            idx = len(events)
+            if snap["status"] != "running":
+                payload = {"status": snap["status"], "result": snap["result"],
+                           "error": snap["error"]}
+                yield f"event: end\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+                break
+            await asyncio.sleep(0.3)
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 
 @app.post("/v1/chat/completions", dependencies=[Depends(require_local_key)])

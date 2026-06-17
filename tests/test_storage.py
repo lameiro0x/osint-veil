@@ -1,7 +1,6 @@
 """Tests de persistencia: reuso de tokens, cifrado y rechazo de secretos."""
 
 import importlib
-import os
 import uuid
 
 import pytest

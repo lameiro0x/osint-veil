@@ -15,11 +15,10 @@ Defensas:
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass, field, replace
 from typing import Protocol
-
-import logging
 
 from . import egress
 from .config import CaseConfig, get_settings
@@ -74,10 +73,11 @@ class OrchestratorResult:
 class Orchestrator:
     def __init__(self, *, client: LLMClient, gateway: ToolGateway, store: CaseStore,
                  case: CaseConfig, target: str, budget: Budget | None = None,
-                 model: str | None = None):
+                 model: str | None = None, progress=None):
         self.client = client
         self.gateway = gateway
         self.store = store
+        self.progress = progress  # callable(dict) opcional, para progreso en vivo
         # El objetivo y el scope se tratan SIEMPRE como dominios sensibles, así
         # los subdominios DESCUBIERTOS se tokenizan incluso en balanced/reporting
         # (no se pueden pre-listar porque se descubren durante el OSINT).
@@ -94,6 +94,13 @@ class Orchestrator:
         self.target = target
         self.budget = budget or Budget()
         self.model = model
+
+    def _emit(self, kind: str, **data) -> None:
+        if self.progress:
+            try:
+                self.progress({"event": kind, **data})
+            except Exception:  # noqa: BLE001 — el progreso nunca rompe el OSINT
+                pass
 
     def _safe_tool_result(self, tool: str, raw: str) -> tuple[str, dict[str, int]]:
         """raw -> vault (sin secretos) -> tokenizado+anotado -> versión segura."""
@@ -119,6 +126,7 @@ class Orchestrator:
         warning = egress.preflight(mode=s.egress_mode, locked=s.egress_locked)
         if warning:
             _log.warning(warning)
+        self._emit("start", target=self.target, tools=self.gateway.tool_names())
 
         messages: list[dict] = [{
             "role": "user",
@@ -132,8 +140,10 @@ class Orchestrator:
         start = time.monotonic()
 
         for i in range(1, self.budget.max_iterations + 1):
+            self._emit("iteration", n=i, max=self.budget.max_iterations)
             if time.monotonic() - start > self.budget.max_seconds:
-                return self._finish(messages, i - 1, "timeout", total_counts, tool_log, total_tokens)
+                return self._finish(messages, i - 1, "timeout", total_counts,
+                                    tool_log, total_tokens)
 
             turn = self.client.run_turn(system=SYSTEM_PROMPT, messages=messages,
                                         tools=tools, model=self.model)
@@ -146,6 +156,8 @@ class Orchestrator:
 
             if not tool_uses or turn.get("stop_reason") == "end_turn":
                 final = "".join(b.get("text", "") for b in content if b.get("type") == "text")
+                self._emit("done", stop_reason="completed", iterations=i,
+                           censored=total_counts)
                 return OrchestratorResult(
                     final_text=final, iterations=i, stop_reason="completed",
                     type_counts=total_counts, tool_calls=tool_log, total_tokens=total_tokens,
@@ -167,13 +179,15 @@ class Orchestrator:
                 except Exception as e:  # noqa: BLE001 — error como dato, no romper loop
                     safe = f"{_WRAP_OPEN}\nERROR de herramienta: {e}\n{_WRAP_CLOSE}"
                     tool_log.append({"tool": name, "ok": False, "reason": str(e)})
+                self._emit("tool", tool=name, ok=tool_log[-1]["ok"])
                 tool_results.append({"type": "tool_result", "tool_use_id": tu_id,
                                      "content": safe})
 
             messages.append({"role": "user", "content": tool_results})
 
             if total_tokens > self.budget.max_total_tokens:
-                return self._finish(messages, i, "token_budget", total_counts, tool_log, total_tokens)
+                return self._finish(messages, i, "token_budget", total_counts,
+                                    tool_log, total_tokens)
 
         return self._finish(messages, self.budget.max_iterations, "max_iterations",
                             total_counts, tool_log, total_tokens)
@@ -188,6 +202,7 @@ class Orchestrator:
                 )
                 if final:
                     break
+        self._emit("done", stop_reason=reason, iterations=iterations, censored=counts)
         return OrchestratorResult(
             final_text=final, iterations=iterations, stop_reason=reason,
             type_counts=counts, tool_calls=tool_log, total_tokens=total_tokens,

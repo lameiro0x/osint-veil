@@ -11,8 +11,8 @@ Las herramientas corren EN LOCAL (invariante 1). Su salida de red pasa por
 from __future__ import annotations
 
 import socket
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from .egress import assert_tool_target_allowed, safe_get
 
@@ -52,6 +52,9 @@ class ToolGateway:
 
     def register(self, tool: ToolSpec) -> None:
         self._tools[tool.name] = tool
+
+    def tool_names(self) -> list[str]:
+        return list(self._tools)
 
     def anthropic_tools(self) -> list[dict]:
         """Esquemas de herramientas en formato Anthropic (para el tool_use)."""

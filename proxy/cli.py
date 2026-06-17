@@ -24,6 +24,7 @@ from .logging_setup import setup_logging
 from .orchestrator import Budget, Orchestrator
 from .report import build_report, review_queue
 from .storage import CaseStore
+from .tools_external import external_tools
 
 
 def _cmd_audit(args) -> int:
@@ -38,8 +39,8 @@ def _cmd_audit(args) -> int:
 
     case = get_case_config(args.case)
     store = CaseStore(args.case)
-    gateway = ToolGateway(scope_domains=[args.target] + (args.scope or []),
-                          tools=builtin_tools())
+    tools = builtin_tools() + external_tools(allow_active=args.allow_active)
+    gateway = ToolGateway(scope_domains=[args.target] + (args.scope or []), tools=tools)
     client = ClaudeClient(settings)
     budget = Budget(max_iterations=args.max_iter)
 
@@ -106,6 +107,8 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--target", required=True)
     a.add_argument("--scope", nargs="*", help="Dominios extra dentro de alcance")
     a.add_argument("--max-iter", type=int, default=12)
+    a.add_argument("--allow-active", action="store_true",
+                   help="Habilita herramientas activas/intrusivas (nmap, amass -active)")
     a.add_argument("--report")
     a.set_defaults(func=_cmd_audit)
 

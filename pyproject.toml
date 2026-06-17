@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "osint-veil"
+version = "0.1.0"
+description = "Privacy gateway local que deja a Claude hacer OSINT sin filtrar datos reales."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "lameiro0x" }]
+keywords = ["osint", "privacy", "pentesting", "claude", "anthropic", "dlp", "llm"]
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "anthropic>=0.40",
+    "python-dotenv>=1.0",
+    "PyYAML>=6.0",
+    "cryptography>=42.0",
+]
+
+[project.optional-dependencies]
+# NER de nombres de persona (opcional). Tras instalar:
+#   python -m spacy download es_core_news_sm
+ner = ["spacy>=3.7"]
+dev = ["pytest>=8.0", "httpx>=0.27", "ruff>=0.6"]
+
+[project.scripts]
+osint-veil = "proxy.cli:main"
+
+[project.urls]
+Homepage = "https://lameiro0x.com"
+Repository = "https://github.com/lameiro0x/osint-veil"
+
+[tool.setuptools]
+packages = ["proxy"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["B008"]  # FastAPI usa Depends() en defaults de argumentos
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

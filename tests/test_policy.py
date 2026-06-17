@@ -17,7 +17,7 @@ def _sanitizer(case_id="cliente_a_2026"):
 def test_hint_no_contiene_valor_real():
     s, store = _sanitizer()
     s.sanitize("host vpn-corp-backup.cliente.com encontrado")
-    for token, hint in store.annotations().items():
+    for hint in store.annotations().values():
         assert "cliente.com" not in hint
         assert "vpn-corp-backup.cliente.com" not in hint
 

@@ -1,0 +1,19 @@
+services:
+  osint-veil:
+    build: .
+    image: osint-veil:latest
+    ports:
+      - "127.0.0.1:8000:8000"   # solo localhost; no exponer a la red
+    env_file:
+      - .env
+    environment:
+      PROXY_EGRESS: enforce
+      PROXY_APPLY_LOCKDOWN: "1"   # aplica el lockdown de red en el arranque
+      PROXY_STORAGE_PATH: /data
+      PROXY_CASES_PATH: /cases
+    cap_add:
+      - NET_ADMIN                 # necesario para aplicar iptables (egress lockdown)
+    volumes:
+      - ./proxy_data:/data        # vault cifrado persistente (gitignored)
+      - ./cases:/cases:ro         # configs de caso (solo lectura)
+    restart: unless-stopped

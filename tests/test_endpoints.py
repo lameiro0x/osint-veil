@@ -92,6 +92,17 @@ def test_osint_report_rehydrate_bloqueado():
     assert r2.status_code == 200
 
 
+def test_osint_job_start_sin_api_key_da_500():
+    r = client.post("/osint/jobs",
+                    json={"case_id": "jc", "target": "cliente.com"}, headers=AUTH)
+    assert r.status_code == 500
+
+
+def test_osint_job_desconocido_404():
+    r = client.get("/osint/jobs/job-noexiste", headers=AUTH)
+    assert r.status_code == 404
+
+
 def test_review_queue_endpoint():
     case = "rqcase"
     client.post("/privacy/sanitize",
