@@ -103,8 +103,20 @@ class OsintRequest(BaseModel):
 
 # ── Endpoints ─────────────────────────────────────────────────────────
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict[str, Any]:
+    """Estado operativo. No revela secretos, solo flags de configuración."""
+    from . import __version__
+    s = get_settings()
+    return {
+        "status": "ok",
+        "version": __version__,
+        "default_mode": s.default_mode,
+        "egress_mode": s.egress_mode,
+        "egress_locked": s.egress_locked,
+        "encryption_enabled": bool(s.encryption_key),
+        "local_key_configured": s.proxy_local_api_key not in ("", "change-me"),
+        "anthropic_key_configured": bool(s.anthropic_api_key),
+    }
 
 
 @app.post("/privacy/sanitize", dependencies=[Depends(require_local_key)])

@@ -104,11 +104,21 @@ def validate_settings(settings: Settings | None = None, *, require_api_key: bool
 
 def _load_case_file(path: Path) -> dict:
     text = path.read_text(encoding="utf-8")
-    if path.suffix in (".yaml", ".yml"):
-        return yaml.safe_load(text) or {}
-    if path.suffix == ".json":
-        return json.loads(text)
-    return {}
+    try:
+        if path.suffix in (".yaml", ".yml"):
+            data = yaml.safe_load(text) or {}
+        elif path.suffix == ".json":
+            data = json.loads(text)
+        else:
+            return {}
+    except (yaml.YAMLError, json.JSONDecodeError) as exc:
+        raise ConfigError(f"Config de caso inválida en {path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ConfigError(f"Config de caso inválida en {path}: se esperaba un objeto.")
+    for key in ("sensitive_domains", "sensitive_keywords", "sensitive_names"):
+        if key in data and not isinstance(data[key], list):
+            raise ConfigError(f"Config de caso inválida en {path}: '{key}' debe ser una lista.")
+    return data
 
 
 def get_case_config(case_id: str) -> CaseConfig:

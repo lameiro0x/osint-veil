@@ -10,7 +10,7 @@ las equivalencias en local (cifradas) y envía a Claude **solo una versión segu
 
 <p align="left">
   <img alt="Python" src="https://img.shields.io/badge/python-3.10%2B-blue">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-67%20passing-brightgreen">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-82%20passing-brightgreen">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-lightgrey">
   <img alt="Status" src="https://img.shields.io/badge/status-MVP-orange">
 </p>
@@ -279,17 +279,22 @@ En producción: `PROXY_EGRESS=enforce` + `deploy/egress_lockdown.sh`.
 
 ## 10. Qué se detecta
 
-**Secretos (se eliminan, nunca se almacenan):** `sk-`, `ghp_`, `github_pat_`,
-`gho_/ghs_/ghu_`, `AKIA…`, JWT (`eyJ…`), `Authorization: Bearer …`,
-`Cookie:` / `Set-Cookie:`, `client_secret=`, `password=`, `passwd=`,
-`access_token=`, `refresh_token=`, claves privadas PEM (`BEGIN … PRIVATE KEY`).
+**Secretos (se eliminan, nunca se almacenan):** GitHub (`ghp_`, `github_pat_`,
+`gho_/ghs_/ghu_`), OpenAI (`sk-`), AWS (`AKIA…`), Slack (`xoxb-…`), Google
+(`AIza…`), Stripe (`sk_live_…`), SendGrid (`SG.…`), GitLab (`glpat-…`), npm
+(`npm_…`), Twilio (`SK…`), Azure (`AccountKey=…`), JWT (`eyJ…`),
+`Authorization: Bearer …`, `Cookie:` / `Set-Cookie:`, asignaciones
+`client_secret=` / `password=` / `api_key=` / `secret_key=` / `access_token=` /
+`refresh_token=`, y claves privadas PEM/PGP (`BEGIN … PRIVATE KEY`).
 
 **Identificadores (se tokenizan, con pista de relevancia):** email → `EMAIL_001`,
 dominio → `DOMAIN_001`, subdominio → `SUBDOMAIN_001`, IP interna →
 `INTERNAL_IP_001`, IP pública → `PUBLIC_IP_001`, repositorio → `REPO_001`, URL
 privada → `URL_001`, GUID → `APP_ID_001`/`TENANT_ID_001` (según contexto), cuenta
 de servicio → `SERVICE_ACCOUNT_001`, persona → `PERSON_001`, ruta interna →
-`PATH_001`, palabra clave del caso → `KEYWORD_001`.
+`PATH_001`, tarjeta de crédito (validada Luhn) → `CREDIT_CARD_001`, dirección MAC
+→ `MAC_001`, dirección cripto (ETH/BTC) → `CRYPTO_ADDR_001`, palabra clave del
+caso → `KEYWORD_001`.
 
 ## 11. Tests
 

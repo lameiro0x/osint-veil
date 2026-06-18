@@ -55,6 +55,9 @@ _BASE_RELEVANCE = {
     "REPO": "media",
     "EMAIL": "media",
     "SERVICE_ACCOUNT": "alta",
+    "CREDIT_CARD": "alta",
+    "CRYPTO_ADDR": "media",
+    "MAC": "baja",
     "PATH": "baja",
 }
 

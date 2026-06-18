@@ -56,6 +56,26 @@ _APP_CONTEXT = re.compile(r"(app|application|client[_ -]?id|appid)", re.IGNORECA
 # Forma de un token ya generado (p.ej. SERVICE_ACCOUNT_001) — para no re-tokenizarlo.
 _TOKEN_SHAPE = re.compile(r"^[A-Z][A-Z_]*_\d{3,}$")
 
+# Otros identificadores sensibles.
+_MAC = re.compile(r"\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b")
+_CRYPTO = re.compile(r"\b(?:0x[a-fA-F0-9]{40}|bc1[ac-hj-np-z02-9]{11,71})\b")
+_CC_CANDIDATE = re.compile(r"\b\d(?:[ -]?\d){12,18}\b")  # 13-19 dígitos, sin tragar separador final
+
+
+def _luhn_ok(digits: str) -> bool:
+    """Validación de Luhn para reducir falsos positivos en tarjetas."""
+    if not 13 <= len(digits) <= 19:
+        return False
+    total, parity = 0, len(digits) % 2
+    for i, ch in enumerate(digits):
+        d = ord(ch) - 48
+        if i % 2 == parity:
+            d *= 2
+            if d > 9:
+                d -= 9
+        total += d
+    return total % 10 == 0
+
 
 _SPACY_NLP = None  # caché del modelo NER (carga perezosa, una vez)
 _SPACY_TRIED = False
@@ -187,6 +207,20 @@ class Sanitizer:
             type_name = "APP_ID" if _APP_CONTEXT.search(prefix) else "TENANT_ID"
             return self._tokenize(result, type_name, m.group(0))
         result.sanitized_text = _GUID.sub(_guid_sub, result.sanitized_text)
+
+        # 5d. Tarjetas de crédito (validadas por Luhn), MAC y direcciones crypto.
+        def _cc_sub(m: re.Match) -> str:
+            digits = re.sub(r"\D", "", m.group(0))
+            if _luhn_ok(digits):
+                return self._tokenize(result, "CREDIT_CARD", m.group(0))
+            return m.group(0)
+        result.sanitized_text = _CC_CANDIDATE.sub(_cc_sub, result.sanitized_text)
+        result.sanitized_text = _MAC.sub(
+            lambda m: self._tokenize(result, "MAC", m.group(0)), result.sanitized_text
+        )
+        result.sanitized_text = _CRYPTO.sub(
+            lambda m: self._tokenize(result, "CRYPTO_ADDR", m.group(0)), result.sanitized_text
+        )
 
         # 6. Dominios / subdominios.
         result.sanitized_text = _HOST.sub(self._host_sub(result), result.sanitized_text)

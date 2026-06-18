@@ -11,7 +11,12 @@ AUTH = {"Authorization": "Bearer test-key"}
 def test_health_sin_auth():
     r = client.get("/health")
     assert r.status_code == 200
-    assert r.json()["status"] == "ok"
+    body = r.json()
+    assert body["status"] == "ok"
+    assert "version" in body
+    assert isinstance(body["encryption_enabled"], bool)
+    # No debe filtrar valores de claves, solo flags booleanos.
+    assert "test-key" not in str(body)
 
 
 def test_sanitize_requiere_auth():

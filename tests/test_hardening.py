@@ -38,6 +38,22 @@ def test_validate_clave_por_defecto_es_error():
     assert any("PROXY_LOCAL_API_KEY" in e for e in errors)
 
 
+def test_case_config_lista_invalida(tmp_path):
+    from proxy.config import ConfigError, _load_case_file
+    p = tmp_path / "bad.yaml"
+    p.write_text("sensitive_domains: no_soy_una_lista\n", encoding="utf-8")
+    with pytest.raises(ConfigError):
+        _load_case_file(p)
+
+
+def test_case_config_yaml_roto(tmp_path):
+    from proxy.config import ConfigError, _load_case_file
+    p = tmp_path / "broken.yaml"
+    p.write_text("a: [1, 2\nb: : :\n", encoding="utf-8")
+    with pytest.raises(ConfigError):
+        _load_case_file(p)
+
+
 def test_validate_sin_encryption_es_aviso():
     s = Settings(proxy_local_api_key="k-larga", encryption_key="")
     errors, warnings = validate_settings(s)
