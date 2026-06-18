@@ -34,3 +34,8 @@ dist/
 .idea/
 .DS_Store
 *.swp
+
+# Cobertura
+.coverage
+htmlcov/
+coverage.xml
