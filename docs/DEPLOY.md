@@ -30,7 +30,7 @@ el lockdown de egress en el arranque (requiere `CAP_NET_ADMIN`):
 
 ```bash
 cp .env.example .env      # rellena las claves
-docker compose up --build
+make up                   # = docker compose up --build -d (lockdown automático)
 # proxy en http://127.0.0.1:8000  (solo localhost)
 ```
 
@@ -38,6 +38,8 @@ Qué hace el contenedor:
 - Corre el proxy como `proxyuser` (puede hablar con Anthropic).
 - `PROXY_APPLY_LOCKDOWN=1` ejecuta `deploy/egress_lockdown.sh` sobre `osinttools`
   y marca `PROXY_EGRESS_LOCKED=1`.
+- Las herramientas **externas** (binarios) se ejecutan como `osinttools`
+  (`PROXY_TOOLS_USER`, vía sudo) → el lockdown de red las corta de verdad.
 - El puerto se publica **solo en localhost**.
 
 > Sin `CAP_NET_ADMIN` el lockdown no se puede aplicar y, en modo `enforce`, el
@@ -45,12 +47,22 @@ Qué hace el contenedor:
 
 ## 4. Bare-metal / systemd
 
+De un tirón (crea el usuario, aplica lockdown y arranca):
+
+```bash
+make install
+make secure-up        # ensure-tools-user + lockdown + serve (pide sudo)
+```
+
+Manual, equivalente:
+
 ```bash
 pip install -e .                 # instala el CLI 'osint-veil'
-# aplica el lockdown de red (como root, ajusta usuarios):
-sudo PROXY_USER=$(whoami) TOOLS_USER=osinttools deploy/egress_lockdown.sh
-export PROXY_EGRESS_LOCKED=1
-uvicorn proxy.app:app --host 127.0.0.1 --port 8000
+sudo useradd -r -s /usr/sbin/nologin osinttools
+echo "$(id -un) ALL=(osinttools) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/osint-veil
+sudo PROXY_USER=$(id -un) TOOLS_USER=osinttools deploy/egress_lockdown.sh
+PROXY_EGRESS=enforce PROXY_EGRESS_LOCKED=1 PROXY_TOOLS_USER=osinttools \
+  uvicorn proxy.app:app --host 127.0.0.1 --port 8000
 ```
 
 Para autónomo por CLI:

@@ -36,6 +36,7 @@ class Settings:
     cases_path: Path = field(default_factory=lambda: Path("./cases"))
     egress_mode: str = "warn"        # off | warn | enforce
     egress_locked: bool = False      # lo pone el despliegue tras aplicar el lockdown de red
+    tools_user: str = ""             # usuario sin salida a la IA para herramientas externas
 
 
 @dataclass
@@ -72,6 +73,7 @@ def get_settings() -> Settings:
         cases_path=Path(os.getenv("PROXY_CASES_PATH", "./cases")),
         egress_mode=egress,
         egress_locked=os.getenv("PROXY_EGRESS_LOCKED", "0").strip() == "1",
+        tools_user=os.getenv("PROXY_TOOLS_USER", "").strip(),
     )
 
 
@@ -96,7 +98,11 @@ def validate_settings(settings: Settings | None = None, *, require_api_key: bool
     if s.egress_mode == "enforce" and not s.egress_locked:
         warnings.append("PROXY_EGRESS=enforce pero PROXY_EGRESS_LOCKED!=1: el OSINT "
                         "autónomo se negará a arrancar hasta aplicar el lockdown de red.")
-    elif s.egress_mode != "enforce":
+    if s.egress_mode == "enforce" and s.egress_locked and not s.tools_user:
+        warnings.append("PROXY_EGRESS=enforce y lockdown aplicado, pero PROXY_TOOLS_USER "
+                        "está vacío: las herramientas externas correrían como el usuario "
+                        "del proxy (con salida a la IA). Fija PROXY_TOOLS_USER.")
+    if s.egress_mode != "enforce":
         warnings.append(f"PROXY_EGRESS={s.egress_mode}: el egress no se fuerza. En "
                         "producción usa 'enforce' + deploy/egress_lockdown.sh.")
     return errors, warnings

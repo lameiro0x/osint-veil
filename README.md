@@ -248,9 +248,12 @@ osint-veil audit --case c --target cliente.com --allow-active   # incluye nmap s
 **Despliegue (Docker, egress real, ZDR):** ver [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 ```bash
-pip install -e .            # instala el CLI 'osint-veil'
-# o:  docker compose up --build
+make up                     # Docker, de un tirón (lockdown de red automático)
+# o bare-metal:  make install && make secure-up
+# o desarrollo:  pip install -e . && osint-veil ...
 ```
+
+`make help` lista todos los atajos (install, test, lint, up/down, secure-up, audit).
 
 ## Egress control (obligatorio en producción)
 

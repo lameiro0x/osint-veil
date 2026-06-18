@@ -9,12 +9,15 @@ FROM python:3.12-slim
 
 # Herramientas OSINT pasivas habituales (opcionales pero útiles).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        whois dnsutils iptables ca-certificates \
+        whois dnsutils iptables ca-certificates sudo \
     && rm -rf /var/lib/apt/lists/*
 
-# Usuarios sin privilegios.
+# Usuarios sin privilegios: proxyuser (corre el proxy) y osinttools (corre las
+# herramientas, sin salida a la IA tras el lockdown).
 RUN useradd -r -s /usr/sbin/nologin osinttools \
-    && useradd -m -s /bin/bash proxyuser
+    && useradd -m -s /bin/bash proxyuser \
+    && echo 'proxyuser ALL=(osinttools) NOPASSWD: ALL' > /etc/sudoers.d/osint-veil \
+    && chmod 0440 /etc/sudoers.d/osint-veil
 
 WORKDIR /app
 COPY pyproject.toml README.md ./
@@ -27,6 +30,7 @@ RUN chmod +x deploy/*.sh
 ENV PROXY_STORAGE_PATH=/data \
     PROXY_CASES_PATH=/cases \
     PROXY_EGRESS=enforce \
+    PROXY_TOOLS_USER=osinttools \
     PROXY_ACCESS_LOG=0
 RUN mkdir -p /data /cases && chown proxyuser:proxyuser /data /cases
 

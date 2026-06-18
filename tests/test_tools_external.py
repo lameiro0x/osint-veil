@@ -54,6 +54,30 @@ def test_handler_ejecuta_con_objetivo_valido(monkeypatch):
     assert captured["cmd"] == ["subfinder", "-silent", "-d", "cliente.com"]  # args como lista
 
 
+def test_run_como_usuario_sin_ia(monkeypatch):
+    captured = {}
+    monkeypatch.setenv("PROXY_TOOLS_USER", "osinttools")
+    monkeypatch.setattr(te.shutil, "which", lambda b: f"/usr/bin/{b}")
+
+    def fake_run(cmd, **k):
+        captured["cmd"] = cmd
+        return _fake_proc(stdout="ok")
+    monkeypatch.setattr(te.subprocess, "run", fake_run)
+
+    te._run(["subfinder", "-d", "cliente.com"])
+    assert captured["cmd"][:4] == ["sudo", "-n", "-u", "osinttools"]
+    assert captured["cmd"][4:] == ["subfinder", "-d", "cliente.com"]
+
+
+def test_run_sin_usuario_no_usa_sudo(monkeypatch):
+    captured = {}
+    monkeypatch.delenv("PROXY_TOOLS_USER", raising=False)
+    monkeypatch.setattr(te.subprocess, "run",
+                        lambda cmd, **k: captured.update(cmd=cmd) or _fake_proc())
+    te._run(["whois", "cliente.com"])
+    assert captured["cmd"] == ["whois", "cliente.com"]
+
+
 class _FakeProc:
     def __init__(self, stdout="", stderr=""):
         self.stdout, self.stderr, self.returncode = stdout, stderr, 0

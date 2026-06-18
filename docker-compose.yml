@@ -9,6 +9,7 @@ services:
     environment:
       PROXY_EGRESS: enforce
       PROXY_APPLY_LOCKDOWN: "1"   # aplica el lockdown de red en el arranque
+      PROXY_TOOLS_USER: osinttools  # las herramientas corren como este usuario (sin IA)
       PROXY_STORAGE_PATH: /data
       PROXY_CASES_PATH: /cases
     cap_add:

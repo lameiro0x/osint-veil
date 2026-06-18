@@ -21,8 +21,10 @@ Garantías que el proyecto persigue (detalle en [`docs/DESIGN.md`](docs/DESIGN.m
 - El **objetivo** investigado y las **relaciones** que el resumidor envía salen en
   claro a la IA por diseño — es lo necesario para que el OSINT sea útil.
 - El **egress a nivel de red** es responsabilidad del despliegue
-  (`deploy/egress_lockdown.sh` / Docker con `CAP_NET_ADMIN`). El software lo exige
-  pero la garantía final la pone la red.
+  (`deploy/egress_lockdown.sh` / `make up` / Docker con `CAP_NET_ADMIN`). El
+  software lo exige pero la garantía final la pone la red. Las herramientas
+  externas se ejecutan como un usuario sin salida a la IA (`PROXY_TOOLS_USER`),
+  de modo que el bloqueo por-usuario las corta aunque abran su propio socket.
 - La **no retención** por parte de Anthropic requiere un acuerdo **ZDR**; el código
   no puede forzarlo.
 

@@ -17,6 +17,7 @@ lockdown de RED (deploy/egress_lockdown.sh), no del software.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -34,8 +35,23 @@ def _valid_target(value: str) -> bool:
     return bool(_VALID_TARGET.match(value.strip()))
 
 
+def _tool_user_prefix() -> list[str]:
+    """Si PROXY_TOOLS_USER está fijado, ejecuta la herramienta como ESE usuario.
+
+    Así el lockdown de red por-usuario (iptables --uid-owner) corta de verdad la
+    salida de las herramientas hacia el proveedor de IA, aunque el binario intente
+    abrir su propio socket. Requiere sudoers: el usuario del proxy puede correr
+    como PROXY_TOOLS_USER sin contraseña (lo configura el Dockerfile/despliegue).
+    """
+    user = os.getenv("PROXY_TOOLS_USER", "").strip()
+    if user and shutil.which("sudo"):
+        return ["sudo", "-n", "-u", user]
+    return []
+
+
 def _run(cmd: list[str], *, timeout: int = _TIMEOUT) -> str:
     """Ejecuta un binario SIN shell, con timeout, y trunca la salida."""
+    cmd = _tool_user_prefix() + cmd
     try:
         proc = subprocess.run(  # noqa: S603 — args como lista, sin shell
             cmd, capture_output=True, text=True, timeout=timeout, check=False,
