@@ -98,6 +98,7 @@ class JobManager:
                 "censored": result.type_counts,
                 "tool_calls": result.tool_calls,
                 "analysis": analysis,
+                "error": result.error,
             }
             job.status = "done"
         except Exception as e:  # noqa: BLE001 — reportar el fallo en el job, no romper el server

@@ -91,6 +91,11 @@ def _cmd_audit(args) -> int:
     store.write_audit(type_counts=result.type_counts, provider=case.provider,
                       mode=case.mode, dry_run=False, note=f"audit stop={result.stop_reason}")
 
+    if result.stop_reason == "api_error":
+        err.print(Panel.fit(f"[red]Error de la API de Claude:[/]\n{result.error}",
+                            title="✖ OSINT abortado", border_style=C_BAD))
+        return 4
+
     color = C_OK if result.stop_reason == "completed" else "yellow"
     console.print(Panel.fit(
         f"[bold]Estado:[/] [{color}]{result.stop_reason}[/]\n"

@@ -20,6 +20,8 @@ import time
 from dataclasses import dataclass, field, replace
 from typing import Protocol
 
+import anthropic
+
 from . import egress
 from .config import CaseConfig, get_settings
 from .gateway import ScopeError, ToolGateway, ToolNotAllowed
@@ -64,10 +66,11 @@ class Budget:
 class OrchestratorResult:
     final_text: str
     iterations: int
-    stop_reason: str  # "completed" | "max_iterations" | "token_budget" | "timeout"
+    stop_reason: str  # completed | max_iterations | token_budget | timeout | api_error
     type_counts: dict[str, int] = field(default_factory=dict)
     tool_calls: list[dict] = field(default_factory=list)
     total_tokens: int = 0
+    error: str | None = None
 
 
 class Orchestrator:
@@ -145,8 +148,17 @@ class Orchestrator:
                 return self._finish(messages, i - 1, "timeout", total_counts,
                                     tool_log, total_tokens)
 
-            turn = self.client.run_turn(system=SYSTEM_PROMPT, messages=messages,
-                                        tools=tools, model=self.model)
+            try:
+                turn = self.client.run_turn(system=SYSTEM_PROMPT, messages=messages,
+                                            tools=tools, model=self.model)
+            except anthropic.APIError as e:
+                msg = f"{type(e).__name__}: {e}"
+                _log.error("Error de la API de Claude: %s", msg)
+                self._emit("error", message=msg)
+                res = self._finish(messages, i, "api_error", total_counts,
+                                   tool_log, total_tokens)
+                res.error = msg
+                return res
             usage = turn.get("usage", {})
             total_tokens += usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
             content = turn.get("content", [])

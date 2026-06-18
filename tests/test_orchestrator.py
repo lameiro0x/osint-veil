@@ -3,6 +3,8 @@
 import copy
 import uuid
 
+import anthropic
+
 from proxy.config import get_case_config
 from proxy.gateway import ToolGateway, ToolSpec
 from proxy.orchestrator import Budget, Orchestrator
@@ -45,6 +47,14 @@ class AlwaysToolClient:
         return {"content": [{"type": "tool_use", "id": "t", "name": "recon",
                              "input": {"host": "vpn.cliente.com"}}],
                 "stop_reason": "tool_use", "usage": {"input_tokens": 5, "output_tokens": 5}}
+
+
+class ApiErrorClient:
+    """Simula un fallo de la API de Claude en el primer turno."""
+
+    def run_turn(self, **kw):
+        import httpx
+        raise anthropic.APIError("boom", request=httpx.Request("POST", "http://x"), body=None)
 
 
 def _setup(client, scope=("cliente.com",), budget=None):
@@ -145,3 +155,10 @@ def test_scope_guard_rechaza_fuera_de_alcance():
     # El tool_result le dice a Claude que fue rechazado.
     safe = client.seen[1][-1]["content"][0]["content"]
     assert "RECHAZADO" in safe
+
+
+def test_api_error_no_crashea():
+    orch, store, _ = _setup(ApiErrorClient())
+    result = orch.run()
+    assert result.stop_reason == "api_error"
+    assert result.error and "boom" in result.error

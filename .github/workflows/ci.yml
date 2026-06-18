@@ -19,5 +19,8 @@ jobs:
           pip install -e ".[dev]"
       - name: Lint (ruff)
         run: ruff check proxy tests
-      - name: Tests (pytest)
-        run: pytest -q
+      - name: Tests (pytest + cobertura)
+        run: pytest -q --cov=proxy --cov-report=term-missing --cov-fail-under=75
+      - name: Auditoría de dependencias (pip-audit)
+        run: pip-audit
+        continue-on-error: true   # informa, no bloquea el merge

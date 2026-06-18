@@ -200,6 +200,7 @@ def osint_run(req: OsintRequest) -> dict[str, Any]:
         "censored": result.type_counts,
         "tool_calls": result.tool_calls,
         "analysis": analysis,
+        "error": result.error,
     }
 
 
