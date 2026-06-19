@@ -37,6 +37,11 @@ class Settings:
     egress_mode: str = "warn"        # off | warn | enforce
     egress_locked: bool = False      # lo pone el despliegue tras aplicar el lockdown de red
     tools_user: str = ""             # usuario sin salida a la IA para herramientas externas
+    # Summarizer local (opcional): condensa la salida YA sanitizada antes de Claude.
+    summarizer: str = "off"          # off | ollama
+    summarizer_model: str = "llama3.2"
+    summarizer_host: str = "http://127.0.0.1:11434"
+    summarizer_min_chars: int = 1500  # solo resume salidas grandes
 
 
 @dataclass
@@ -75,6 +80,10 @@ def get_settings() -> Settings:
         egress_mode=egress,
         egress_locked=os.getenv("PROXY_EGRESS_LOCKED", "0").strip() == "1",
         tools_user=os.getenv("PROXY_TOOLS_USER", "").strip(),
+        summarizer=os.getenv("PROXY_SUMMARIZER", "off").strip().lower(),
+        summarizer_model=os.getenv("PROXY_SUMMARIZER_MODEL", "llama3.2").strip(),
+        summarizer_host=os.getenv("PROXY_SUMMARIZER_HOST", "http://127.0.0.1:11434").strip(),
+        summarizer_min_chars=int(os.getenv("PROXY_SUMMARIZER_MIN_CHARS", "1500")),
     )
 
 

@@ -28,6 +28,7 @@ from .gateway import ScopeError, ToolGateway, ToolNotAllowed
 from .sanitizer import Sanitizer
 from .secrets import find_secrets, scrub_secrets
 from .storage import CaseStore
+from .summarizer import summarize
 
 _log = logging.getLogger("osint_veil.orchestrator")
 
@@ -118,8 +119,14 @@ class Orchestrator:
         self.store.add_finding(tool, scrubbed)
         # 3. Tokenizar + anotar lo que verá Claude.
         san = Sanitizer(self.store, self.case, source_tool=tool).sanitize(scrubbed)
+        # 3b. (Opt-in) Condensar con LLM local SOBRE el texto ya seguro (tokenizado).
+        text_for_claude = san.sanitized_text
+        summary = summarize(text_for_claude, get_settings())
+        if summary:
+            self._emit("summarized", tool=tool, before=len(text_for_claude), after=len(summary))
+            text_for_claude = summary
         glossary = Sanitizer.render_annotations(san.annotations)
-        body = san.sanitized_text + (("\n\n" + glossary) if glossary else "")
+        body = text_for_claude + (("\n\n" + glossary) if glossary else "")
         # Evita que un output inyectado cierre el envoltorio antes de tiempo.
         body = body.replace(_WRAP_OPEN, "<<>>").replace(_WRAP_CLOSE, "<<>>")
         safe = f"{_WRAP_OPEN}\n{body}\n{_WRAP_CLOSE}"

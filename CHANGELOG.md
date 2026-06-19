@@ -3,6 +3,15 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 Versionado [SemVer](https://semver.org/lang/es/).
 
+## [0.1.2] — 2026-06-19
+
+### Añadido
+- **Summarizer local opcional** (`PROXY_SUMMARIZER=ollama`): condensa las salidas
+  grandes de herramientas ANTES de enviarlas a Claude (menos tokens, mejor señal).
+  Opt-in y sin dependencias nuevas (habla con la API HTTP local de Ollama). Opera
+  solo sobre texto ya anonimizado (tokenizado, sin secretos), con re-escaneo de
+  secretos del resumen y fail-safe: si Ollama no está, el pipeline sigue igual.
+
 ## [0.1.1] — 2026-06-19
 
 ### Añadido

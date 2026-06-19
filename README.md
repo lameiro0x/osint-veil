@@ -10,7 +10,7 @@ las equivalencias en local (cifradas) y envía a Claude **solo una versión segu
 
 <p align="left">
   <img alt="Python" src="https://img.shields.io/badge/python-3.10%2B-blue">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-92%20passing-brightgreen">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-97%20passing-brightgreen">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-lightgrey">
   <img alt="Status" src="https://img.shields.io/badge/status-MVP-orange">
 </p>
@@ -248,6 +248,12 @@ pasivos (`subfinder`, `amass`, `whois`) y, con `--allow-active`, activos/intrusi
 ```bash
 osint-veil audit --case c --target cliente.com --allow-active   # incluye nmap si está
 ```
+
+**Summarizer local (opcional):** si activas `PROXY_SUMMARIZER=ollama` (requiere
+[Ollama](https://ollama.com) + un modelo), las salidas grandes de herramientas se
+**condensan en local** antes de ir a Claude (menos tokens, mejor señal). Opera solo
+sobre texto ya anonimizado y es **opt-in** — sin él no necesitas instalar nada y el
+proxy funciona igual.
 
 **Despliegue (Docker, egress real, ZDR):** ver [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
