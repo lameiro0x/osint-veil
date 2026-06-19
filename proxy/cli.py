@@ -96,17 +96,21 @@ def _cmd_audit(args) -> int:
                             title="✖ OSINT abortado", border_style=C_BAD))
         return 4
 
+    n_secrets = len(store.read_secrets())
     color = C_OK if result.stop_reason == "completed" else "yellow"
     console.print(Panel.fit(
         f"[bold]Estado:[/] [{color}]{result.stop_reason}[/]\n"
         f"[bold]Iteraciones:[/] {result.iterations}    "
         f"[bold]Tokens:[/] {result.total_tokens}    "
-        f"[bold]Herramientas usadas:[/] {len(result.tool_calls)}",
+        f"[bold]Herramientas usadas:[/] {len(result.tool_calls)}"
+        + (f"\n[bold red]Secretos guardados (local):[/] {n_secrets} "
+           f"(ver: osint-veil secrets --case {args.case})" if n_secrets else ""),
         title="Resumen", border_style=color,
     ))
     console.print(_counts_table(result.type_counts, "Privacidad — qué se censuró"))
 
-    report = build_report(store, case, analysis=result.final_text, rehydrate=True)
+    report = build_report(store, case, analysis=result.final_text, rehydrate=True,
+                          reveal_secrets=True)  # informe LOCAL en archivo
     out = args.report or f"informe_{args.case}.md"
     with open(out, "w", encoding="utf-8") as f:
         f.write(report)
@@ -126,7 +130,8 @@ def _cmd_audit(args) -> int:
 def _cmd_report(args) -> int:
     case = get_case_config(args.case)
     store = CaseStore(args.case)
-    report = build_report(store, case, analysis="", rehydrate=not args.anon)
+    report = build_report(store, case, analysis="", rehydrate=not args.anon,
+                          reveal_secrets=not args.anon)  # informe LOCAL en archivo
     out = args.report or f"informe_{args.case}.md"
     with open(out, "w", encoding="utf-8") as f:
         f.write(report)
@@ -150,6 +155,27 @@ def _cmd_review(args) -> int:
         real = store.mappings.get(it["token"], it["token"])
         t.add_row(it["token"], real, it["hint"])
     console.print(t)
+    return 0
+
+
+def _cmd_secrets(args) -> int:
+    store = CaseStore(args.case)
+    secrets = store.read_secrets()
+    if not secrets:
+        console.print("[dim]Sin secretos guardados para este caso "
+                      "(¿store_secrets activo + PROXY_ENCRYPTION_KEY?).[/]")
+        return 0
+    t = Table(title=f"Secretos hallados — {len(secrets)} (LOCAL, nunca enviados a Claude)",
+              title_style="bold red")
+    t.add_column("Tipo", style=C_ACCENT, overflow="fold")
+    t.add_column("Valor" if args.reveal else "Vista previa", style="bold", overflow="fold")
+    t.add_column("Origen", style=C_DIM, overflow="fold")
+    for s in secrets:
+        shown = s.get("value") if args.reveal else s.get("preview")
+        t.add_row(s.get("type", "?"), shown or "", s.get("source_tool") or "—")
+    console.print(t)
+    if not args.reveal:
+        console.print("[dim]Usa --reveal para ver los valores completos (en local).[/]")
     return 0
 
 
@@ -196,6 +222,11 @@ def main(argv: list[str] | None = None) -> int:
     rv = sub.add_parser("review", help="Muestra la cola de revisión (alta relevancia)")
     rv.add_argument("--case", required=True)
     rv.set_defaults(func=_cmd_review)
+
+    sc = sub.add_parser("secrets", help="Muestra los secretos guardados (LOCAL, opt-in)")
+    sc.add_argument("--case", required=True)
+    sc.add_argument("--reveal", action="store_true", help="Muestra los valores completos")
+    sc.set_defaults(func=_cmd_secrets)
 
     tl = sub.add_parser("tools", help="Lista las herramientas OSINT disponibles")
     tl.add_argument("--allow-active", action="store_true")

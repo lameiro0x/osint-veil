@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 
 from .config import CaseConfig
 from .policy import PolicyEngine
-from .secrets import SECRET_PATTERNS, _sentinel
+from .secrets import SECRET_PATTERNS, _sentinel, find_secrets
 from .storage import CaseStore
 
 # ── Patrones de IDENTIFICADORES (se tokenizan) ───────────────────────────
@@ -160,6 +160,12 @@ class Sanitizer:
     # ── pipeline ──────────────────────────────────────────────────────
     def sanitize(self, text: str) -> SanitizeResult:
         result = SanitizeResult(sanitized_text=text)
+
+        # 0. (Opt-in) Capturar secretos reales en el vault local ANTES de
+        #    destruirlos. Nunca van a Claude; solo quedan cifrados en local.
+        if self.case.store_secrets:
+            for sec in find_secrets(text):
+                self.store.add_secret(sec["type"], sec["value"], source_tool=self.source_tool)
 
         # 1. Secretos: eliminar.
         for pattern, replacement, label in SECRET_PATTERNS:

@@ -26,7 +26,7 @@ from . import egress
 from .config import CaseConfig, get_settings
 from .gateway import ScopeError, ToolGateway, ToolNotAllowed
 from .sanitizer import Sanitizer
-from .secrets import scrub_secrets
+from .secrets import find_secrets, scrub_secrets
 from .storage import CaseStore
 
 _log = logging.getLogger("osint_veil.orchestrator")
@@ -107,7 +107,12 @@ class Orchestrator:
 
     def _safe_tool_result(self, tool: str, raw: str) -> tuple[str, dict[str, int]]:
         """raw -> vault (sin secretos) -> tokenizado+anotado -> versión segura."""
-        # 1. Eliminar secretos (no entran al vault ni salen).
+        # 0. (Opt-in) Capturar secretos reales en el vault local ANTES de
+        #    destruirlos (aquí, porque luego se elimina antes del sanitizer).
+        if self.case.store_secrets:
+            for sec in find_secrets(raw):
+                self.store.add_secret(sec["type"], sec["value"], source_tool=tool)
+        # 1. Eliminar secretos (no entran al flujo hacia Claude ni a findings).
         scrubbed, secret_counts = scrub_secrets(raw)
         # 2. Guardar hallazgo real (sin secretos) en el vault para el informe.
         self.store.add_finding(tool, scrubbed)

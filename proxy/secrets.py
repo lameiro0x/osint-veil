@@ -77,3 +77,21 @@ def scrub_secrets(text: str) -> tuple[str, dict[str, int]]:
 def looks_like_secret(text: str) -> bool:
     """True si el texto contiene algo con forma de secreto."""
     return bool(SECRET_SHAPED.search(text))
+
+
+def find_secrets(text: str) -> list[dict]:
+    """Devuelve los secretos reales hallados [{type, value}], SIN modificar texto.
+
+    Pensado para el vault de secretos (opt-in): capturar el valor real ANTES de
+    destruirlo, para poder reportarlo en local. NUNCA se envía a Claude.
+    """
+    found: list[dict] = []
+    seen: set[str] = set()  # dedup: un mismo valor puede casar varios patrones
+    for pattern, _replacement, label in SECRET_PATTERNS:
+        for m in pattern.finditer(text):
+            val = m.group(0)
+            if val in seen:
+                continue
+            seen.add(val)
+            found.append({"type": label, "value": val})
+    return found

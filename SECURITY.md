@@ -8,7 +8,9 @@ sin filtrar datos reales. La seguridad es el objetivo del proyecto, no un extra.
 Garantías que el proyecto persigue (detalle en [`docs/DESIGN.md`](docs/DESIGN.md)):
 
 - **Secretos** (claves, tokens, JWTs, contraseñas) → se **destruyen**: nunca se
-  tokenizan, ni se guardan, ni salen hacia el proveedor de IA.
+  tokenizan ni salen hacia el proveedor de IA. Opcionalmente (`store_secrets` +
+  `PROXY_ENCRYPTION_KEY`) se guardan **en local cifrados** para la auditoría; aun
+  así nunca van a Claude y su valor completo solo se ve en local (la API redacta).
 - **Identificadores** (emails, dominios, IPs, tarjetas, etc.) → se **tokenizan**;
   el valor real vive cifrado en un vault local y solo se rehidrata en local.
 - **3 invariantes innegociables:** (1) el loop y las herramientas corren en local;

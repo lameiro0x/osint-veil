@@ -3,6 +3,9 @@ provider: claude
 model: claude-sonnet-4-6
 mode: strict
 rehydrate_output: false
+# Guardar secretos hallados en LOCAL cifrado (nunca a Claude). Requiere
+# PROXY_ENCRYPTION_KEY. Útil para reportarlos en la auditoría.
+store_secrets: false
 
 sensitive_domains:
   - cliente.com

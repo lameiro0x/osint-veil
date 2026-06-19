@@ -10,7 +10,7 @@ las equivalencias en local (cifradas) y envía a Claude **solo una versión segu
 
 <p align="left">
   <img alt="Python" src="https://img.shields.io/badge/python-3.10%2B-blue">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-82%20passing-brightgreen">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-92%20passing-brightgreen">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-lightgrey">
   <img alt="Status" src="https://img.shields.io/badge/status-MVP-orange">
 </p>
@@ -210,6 +210,7 @@ curl -X POST http://127.0.0.1:8000/v1/chat/completions \
 | `GET /privacy/mappings/{case_id}`     | Mappings del caso (solo en local).                   |
 | `GET /privacy/audit-log/{case_id}`    | Qué tipos se censuraron y cuántas veces.             |
 | `GET /privacy/review-queue/{case_id}` | Hallazgos de alta relevancia (revisión no bloqueante).|
+| `GET /privacy/secrets/{case_id}`      | Secretos hallados — **solo vista previa** (valores completos solo en local). |
 | `POST /osint/run`                     | OSINT autónomo y seguro, **síncrono** (loop client-side). |
 | `POST /osint/jobs`                    | OSINT en **background**; devuelve `job_id` (no bloquea). |
 | `GET /osint/jobs/{job_id}`            | Estado + eventos + resultado del job.                |
@@ -230,6 +231,9 @@ python -m proxy.cli review --case cliente_a_2026
 
 # Listar herramientas OSINT disponibles
 python -m proxy.cli tools [--allow-active]
+
+# Ver secretos hallados (guardados en local, opt-in). --reveal = valores completos
+python -m proxy.cli secrets --case cliente_a_2026 [--reveal]
 ```
 
 La CLI usa [rich](https://github.com/Textualize/rich): paneles, progreso del loop
@@ -289,6 +293,12 @@ En producción: `PROXY_EGRESS=enforce` + `deploy/egress_lockdown.sh`.
 `Authorization: Bearer …`, `Cookie:` / `Set-Cookie:`, asignaciones
 `client_secret=` / `password=` / `api_key=` / `secret_key=` / `access_token=` /
 `refresh_token=`, y claves privadas PEM/PGP (`BEGIN … PRIVATE KEY`).
+
+Por defecto los secretos **se destruyen** (nunca se guardan ni se envían). Para
+auditorías, un caso puede activar `store_secrets: true`: los secretos hallados se
+guardan **en local, cifrados** (requiere `PROXY_ENCRYPTION_KEY`) para poder
+reportarlos — **siguen sin enviarse jamás a Claude**, y su valor completo solo se
+ve en local (`osint-veil secrets --reveal` / informe en archivo), nunca por la API.
 
 **Identificadores (se tokenizan, con pista de relevancia):** email → `EMAIL_001`,
 dominio → `DOMAIN_001`, subdominio → `SUBDOMAIN_001`, IP interna →

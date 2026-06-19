@@ -166,6 +166,14 @@ def review_queue_endpoint(case_id: str) -> dict[str, Any]:
     return {"case_id": case_id, "review_queue": review_queue(store)}
 
 
+@app.get("/privacy/secrets/{case_id}", dependencies=[Depends(require_local_key)])
+def secrets_endpoint(case_id: str) -> dict[str, Any]:
+    """Secretos hallados — SOLO vista previa redactada (los valores completos no
+    salen por la red; se ven en local con 'osint-veil secrets --case X --reveal')."""
+    store = CaseStore(case_id)
+    return {"case_id": case_id, "secrets": store.secrets_redacted()}
+
+
 @app.post("/osint/run", dependencies=[Depends(require_local_key)])
 def osint_run(req: OsintRequest) -> dict[str, Any]:
     """Lanza un OSINT autónomo y seguro (loop client-side). Síncrono."""

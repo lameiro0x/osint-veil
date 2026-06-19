@@ -48,6 +48,7 @@ class CaseConfig:
     model: str | None = None
     mode: str = "strict"
     rehydrate_output: bool = False
+    store_secrets: bool = False  # guardar secretos hallados en local cifrado (auditoría)
     sensitive_domains: list[str] = field(default_factory=list)
     sensitive_keywords: list[str] = field(default_factory=list)
     sensitive_names: list[str] = field(default_factory=list)  # nombres de persona conocidos
@@ -149,6 +150,7 @@ def get_case_config(case_id: str) -> CaseConfig:
         model=raw.get("model") or settings.anthropic_model,
         mode=mode,
         rehydrate_output=bool(raw.get("rehydrate_output", False)),
+        store_secrets=bool(raw.get("store_secrets", False)),
         sensitive_domains=[str(d).lower() for d in raw.get("sensitive_domains", [])],
         sensitive_keywords=[str(k) for k in raw.get("sensitive_keywords", [])],
         sensitive_names=[str(n) for n in raw.get("sensitive_names", [])],

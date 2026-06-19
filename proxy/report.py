@@ -23,8 +23,13 @@ def review_queue(store: CaseStore) -> list[dict]:
 
 
 def build_report(store: CaseStore, case: CaseConfig, *, analysis: str = "",
-                 rehydrate: bool = True) -> str:
-    """Construye un informe en Markdown. Rehidrata tokens en local si se pide."""
+                 rehydrate: bool = True, reveal_secrets: bool = False) -> str:
+    """Construye un informe en Markdown. Rehidrata tokens en local si se pide.
+
+    `reveal_secrets` solo debe activarse en uso LOCAL (CLI / archivo). El valor
+    completo de los secretos JAMÁS debe cruzar la red: la API genera el informe
+    con reveal_secrets=False (solo vista previa).
+    """
     audit = store.read_audit()
     total_censored: dict[str, int] = {}
     for e in audit:
@@ -42,6 +47,15 @@ def build_report(store: CaseStore, case: CaseConfig, *, analysis: str = "",
     text = store.rehydrate(analysis) if (rehydrate and analysis) else analysis
     lines.append(text or "_(sin análisis)_")
     lines.append("")
+
+    secrets = store.read_secrets()
+    if secrets:
+        lines.append("## Secretos encontrados (LOCAL — nunca enviados a Claude)\n")
+        for s in secrets:
+            shown = s.get("value") if reveal_secrets else s.get("preview")
+            origen = f" — origen: {s['source_tool']}" if s.get("source_tool") else ""
+            lines.append(f"- **{s.get('type')}**: `{shown}`{origen}")
+        lines.append("")
 
     high = review_queue(store)
     if high:

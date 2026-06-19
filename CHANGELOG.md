@@ -3,6 +3,16 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 Versionado [SemVer](https://semver.org/lang/es/).
 
+## [0.1.1] — 2026-06-19
+
+### Añadido
+- **Vault de secretos opt-in** (`store_secrets` por caso): los secretos hallados se
+  guardan **en local, cifrados** (requiere `PROXY_ENCRYPTION_KEY`) para poder
+  reportarlos en una auditoría. Garantías: nunca se envían a Claude, nunca se
+  escriben en claro, nunca se tokenizan, y su valor completo solo se ve en local
+  (`osint-veil secrets --reveal` / informe en archivo) — la API solo da vista previa.
+- Comando CLI `secrets` y endpoint `GET /privacy/secrets/{case_id}` (redactado).
+
 ## [0.1.0] — 2026-06-18
 
 Primera versión. Privacy gateway local para OSINT/auditorías con Claude sin

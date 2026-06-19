@@ -1,16 +1,19 @@
-"""Vault local: mappings, metadatos y audit log por case_id.
+"""Vault local: mappings, metadatos, hallazgos, secretos y audit log por case_id.
 
 Reglas duras:
-- NUNCA se escriben secretos reales (claves, tokens, JWTs, contraseñas).
 - Los mappings (token -> valor real identificativo) se separan por case_id.
 - Si hay PROXY_ENCRYPTION_KEY, el almacenamiento se cifra con Fernet.
 - Las pistas de relevancia (hints) pasan por el scanner de secretos antes de
   guardarse/devolverse: una pista jamás puede filtrar un secreto.
+- Los SECRETOS solo se guardan si el caso lo activa (store_secrets) Y hay clave
+  de cifrado. Se guardan en un archivo SEPARADO, cifrado, y NUNCA se envían a
+  Claude (el flujo hacia la IA siempre ve SECRET_REMOVED).
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,6 +22,16 @@ from cryptography.fernet import Fernet, InvalidToken
 
 from .config import get_settings
 from .secrets import looks_like_secret, scrub_secrets
+
+_log = logging.getLogger("osint_veil.storage")
+
+
+def _redact(value: str) -> str:
+    """Vista previa segura de un secreto (no revela el valor completo)."""
+    v = value.strip()
+    if len(v) <= 6:
+        return "***"
+    return f"{v[:3]}…{v[-2:]} ({len(v)} chars)"
 
 
 def _safe_case_id(case_id: str) -> str:
@@ -41,6 +54,7 @@ class CaseStore:
         self._mappings_path = self._dir / "mappings.json"
         self._audit_path = self._dir / "audit-log.json"
         self._findings_path = self._dir / "findings.json"
+        self._secrets_path = self._dir / "secrets.json"
 
         self._fernet: Fernet | None = None
         if settings.encryption_key:
@@ -196,6 +210,55 @@ class CaseStore:
             return json.loads(blob.decode("utf-8"))
         except json.JSONDecodeError:
             return []
+
+    # ── Vault de SECRETOS (opt-in, cifrado obligatorio, jamás a Claude) ──
+    @property
+    def encryption_enabled(self) -> bool:
+        return self._fernet is not None
+
+    def add_secret(self, type_name: str, value: str, *, source_tool: str | None = None,
+                   location: str | None = None) -> bool:
+        """Guarda un secreto REAL en local, cifrado. Devuelve True si se guardó.
+
+        SEGURIDAD: se NIEGA a guardar si no hay cifrado (no escribe secretos en
+        claro). Este archivo NUNCA se envía a Claude ni se expone con valor
+        completo por la API (solo vista previa redactada).
+        """
+        if self._fernet is None:
+            _log.warning("store_secrets activo pero sin PROXY_ENCRYPTION_KEY: "
+                         "el secreto NO se guarda (no se escriben secretos en claro).")
+            return False
+        secrets = self.read_secrets()
+        secrets.append({
+            "type": type_name,
+            "value": value,
+            "preview": _redact(value),
+            "source_tool": source_tool,
+            "location": location,
+            "first_seen": _now(),
+        })
+        self._write_blob(
+            self._secrets_path,
+            json.dumps(secrets, ensure_ascii=False, indent=2).encode("utf-8"),
+        )
+        return True
+
+    def read_secrets(self) -> list[dict]:
+        """Secretos COMPLETOS (uso LOCAL: CLI/informe). No exponer por red."""
+        blob = self._read_blob(self._secrets_path)
+        if not blob:
+            return []
+        try:
+            return json.loads(blob.decode("utf-8"))
+        except json.JSONDecodeError:
+            return []
+
+    def secrets_redacted(self) -> list[dict]:
+        """Metadatos + vista previa (sin valor completo). Seguro para la API."""
+        return [{"type": s.get("type"), "preview": s.get("preview"),
+                 "source_tool": s.get("source_tool"), "location": s.get("location"),
+                 "first_seen": s.get("first_seen")}
+                for s in self.read_secrets()]
 
     def read_audit(self) -> list[dict]:
         blob = self._read_blob(self._audit_path)
