@@ -51,21 +51,22 @@ def _tool_user_prefix() -> list[str]:
 
 def _run(cmd: list[str], *, timeout: int = _TIMEOUT) -> str:
     """Ejecuta un binario SIN shell, con timeout, y trunca la salida."""
+    name = cmd[0] if cmd else "?"  # binario real (antes de anteponer sudo)
     cmd = _tool_user_prefix() + cmd
     try:
         proc = subprocess.run(  # noqa: S603 — args como lista, sin shell
             cmd, capture_output=True, text=True, timeout=timeout, check=False,
         )
     except FileNotFoundError:
-        return f"[{cmd[0]}] no instalado"
+        return f"[{name}] no instalado"
     except subprocess.TimeoutExpired:
-        return f"[{cmd[0]}] timeout tras {timeout}s"
+        return f"[{name}] timeout tras {timeout}s"
     except Exception as e:  # noqa: BLE001
-        return f"[{cmd[0]}] error: {e}"
+        return f"[{name}] error: {e}"
     out = (proc.stdout or "") + (("\n[stderr] " + proc.stderr) if proc.stderr else "")
     if len(out) > _MAX_BYTES:
         out = out[:_MAX_BYTES] + f"\n[...truncado a {_MAX_BYTES} bytes...]"
-    return out.strip() or f"[{cmd[0]}] sin salida"
+    return out.strip() or f"[{name}] sin salida"
 
 
 def _domain_handler(binary: str, build):
@@ -73,8 +74,17 @@ def _domain_handler(binary: str, build):
         target = str(inp.get("domain") or inp.get("host") or "").strip()
         if not _valid_target(target):
             return f"[{binary}] objetivo inválido (esperado dominio/host): {target!r}"
-        return _run(build(target))
+        return _run(build(binary, target))
     return handler
+
+
+def _resolve(binary) -> str | None:
+    """Primer alias del binario que esté instalado (p.ej. theHarvester/theharvester)."""
+    aliases = (binary,) if isinstance(binary, str) else tuple(binary)
+    for b in aliases:
+        if shutil.which(b):
+            return b
+    return None
 
 
 def _spec(name: str, desc: str, arg: str, binary: str, build) -> ToolSpec:
@@ -92,17 +102,40 @@ def _spec(name: str, desc: str, arg: str, binary: str, build) -> ToolSpec:
 
 
 # (nombre, binario, descripción, arg, builder, activa?)
+#
+# PASIVAS: consultan fuentes terceras / DNS; no tocan al objetivo de forma
+# intrusiva. ACTIVAS (activa=True): conectan/escanean el objetivo; solo se
+# exponen al agente con allow_active=True (--allow-active).
+# El builder recibe (binary_resuelto, target): así cmd[0] siempre es el binario
+# que realmente está instalado (p.ej. theHarvester vs theharvester).
 _CANDIDATES = [
+    # ── Pasivas (recon/OSINT) ─────────────────────────────────────────
     ("subfinder", "subfinder", "Enumera subdominios (pasivo) con subfinder.",
-     "domain", lambda t: ["subfinder", "-silent", "-d", t], False),
+     "domain", lambda b, t: [b, "-silent", "-d", t], False),
     ("amass_passive", "amass", "Enumera subdominios en modo PASIVO con amass.",
-     "domain", lambda t: ["amass", "enum", "-passive", "-d", t], False),
+     "domain", lambda b, t: [b, "enum", "-passive", "-d", t], False),
+    ("assetfinder", "assetfinder", "Descubre subdominios (pasivo) con assetfinder.",
+     "domain", lambda b, t: [b, "--subs-only", t], False),
     ("whois", "whois", "Consulta WHOIS de un dominio.",
-     "domain", lambda t: ["whois", t], False),
+     "domain", lambda b, t: [b, t], False),
+    ("dns_records", "dig", "Registros DNS del dominio (A/AAAA/MX/NS/TXT) con dig.",
+     "domain", lambda b, t: [b, "+noall", "+answer", t, "ANY"], False),
+    ("dnsrecon", "dnsrecon", "Enumeración DNS estándar (pasiva) con dnsrecon.",
+     "domain", lambda b, t: [b, "-d", t], False),
+    ("theharvester", ("theHarvester", "theharvester"),
+     "OSINT de subdominios/hosts vía crt.sh con theHarvester.",
+     "domain", lambda b, t: [b, "-d", t, "-b", "crtsh"], False),
+    # ── Activas (intrusivas: solo con allow_active) ───────────────────
     ("nmap_fast", "nmap", "Escaneo de puertos rápido (ACTIVO/intrusivo) con nmap.",
-     "host", lambda t: ["nmap", "-T4", "-F", "-Pn", t], True),
+     "host", lambda b, t: [b, "-T4", "-F", "-Pn", t], True),
     ("amass_active", "amass", "Enumeración ACTIVA de subdominios con amass.",
-     "domain", lambda t: ["amass", "enum", "-active", "-d", t], True),
+     "domain", lambda b, t: [b, "enum", "-active", "-d", t], True),
+    ("whatweb", "whatweb", "Fingerprint de tecnologías web (ACTIVO) con whatweb.",
+     "host", lambda b, t: [b, "--no-errors", t], True),
+    ("wafw00f", "wafw00f", "Detecta WAF (ACTIVO) con wafw00f.",
+     "host", lambda b, t: [b, t], True),
+    ("nuclei", "nuclei", "Escaneo de vulnerabilidades por plantillas (ACTIVO) con nuclei.",
+     "host", lambda b, t: [b, "-silent", "-u", t], True),
 ]
 
 
@@ -115,9 +148,10 @@ def external_tools(*, allow_active: bool = False) -> list[ToolSpec]:
     for name, binary, desc, arg, build, active in _CANDIDATES:
         if active and not allow_active:
             continue
-        if shutil.which(binary) is None:
+        resolved = _resolve(binary)
+        if resolved is None:
             continue
-        tools.append(_spec(name, desc, arg, binary, build))
+        tools.append(_spec(name, desc, arg, resolved, build))
     return tools
 
 

@@ -7,12 +7,16 @@ PORT ?= 8000
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install test lint keygen up down logs ps secure-up lockdown serve \
+.PHONY: help bootstrap install test lint keygen up down logs ps secure-up lockdown serve \
         ensure-tools-user audit clean
 
 help:  ## Muestra esta ayuda
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 	  | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
+
+# ── Instalación de un tirón (Kali/Debian) ─────────────────────────────
+bootstrap:  ## Instala TODO con setup.sh. Pasa flags con ARGS="--all"
+	./setup.sh $(ARGS)
 
 # ── Desarrollo ────────────────────────────────────────────────────────
 install:  ## Instala el paquete + dependencias de desarrollo

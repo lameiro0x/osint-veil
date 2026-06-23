@@ -28,6 +28,32 @@ def test_activas_detras_de_flag(monkeypatch):
     assert "subfinder" in te.available(allow_active=False)  # pasiva siempre
 
 
+def test_toolkit_pro_pasivas_y_activas(monkeypatch):
+    monkeypatch.setattr(te.shutil, "which", lambda b: f"/usr/bin/{b}")  # todo instalado
+    passive = te.available(allow_active=False)
+    active = te.available(allow_active=True)
+    # Recon pasivo ampliado disponible sin flag.
+    for name in ("assetfinder", "dns_records", "dnsrecon", "theharvester"):
+        assert name in passive
+    # Intrusivas SOLO tras allow_active.
+    for name in ("whatweb", "wafw00f", "nuclei"):
+        assert name not in passive
+        assert name in active
+
+
+def test_builders_nuevos_sin_metachars(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(te.shutil, "which", lambda b: f"/usr/bin/{b}")
+    monkeypatch.setattr(te.subprocess, "run",
+                        lambda cmd, **k: captured.update(cmd=cmd) or _fake_proc(stdout="ok"))
+    tool = next(t for t in te.external_tools(allow_active=False) if t.name == "dns_records")
+    tool.handler({"domain": "cliente.com"})
+    assert captured["cmd"] == ["dig", "+noall", "+answer", "cliente.com", "ANY"]
+    nuclei = next(t for t in te.external_tools(allow_active=True) if t.name == "nuclei")
+    nuclei.handler({"host": "cliente.com"})
+    assert captured["cmd"] == ["nuclei", "-silent", "-u", "cliente.com"]
+
+
 def test_handler_rechaza_objetivo_malicioso(monkeypatch):
     calls = []
     monkeypatch.setattr(te.shutil, "which", lambda b: f"/usr/bin/{b}")

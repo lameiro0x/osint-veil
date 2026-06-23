@@ -3,6 +3,21 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 Versionado [SemVer](https://semver.org/lang/es/).
 
+## [0.1.3] — 2026-06-23
+
+### Añadido
+- **Instalador de un tirón `setup.sh`** (Kali/Debian/Ubuntu): deps de sistema +
+  venv + paquete + `.env` con claves autogeneradas (idempotente, no pisa claves
+  existentes). Flags `--tools/--ner/--ollama/--lockdown/--all`. Atajo `make bootstrap`.
+- **Toolkit OSINT/recon del agente ampliado** en `proxy/tools_external.py`:
+  pasivas `assetfinder`, `dig` (registros DNS), `dnsrecon`, `theHarvester` (crt.sh);
+  activas (tras `--allow-active`) `whatweb`, `wafw00f`, `nuclei`. Mismo modelo de
+  seguridad: sin shell, args como lista, target validado por regex estricto.
+
+### Corregido
+- `setup.sh`: el reemplazo de claves en `.env` usa callback en `re.sub` para que
+  backslashes o `\1` dentro del valor no se interpreten como backreferences.
+
 ## [0.1.2] — 2026-06-19
 
 ### Añadido

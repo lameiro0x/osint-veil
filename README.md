@@ -75,10 +75,25 @@ Módulos (`proxy/`):
 
 ## 3. Instalación
 
+### Un tirón (Kali / Debian / Ubuntu) — recomendado
+
+```bash
+git clone https://github.com/lameiro0x/osint-veil && cd osint-veil
+./setup.sh --all        # deps + venv + paquete + .env con claves + toolkit + Ollama + lockdown
+```
+
+`setup.sh` es idempotente y NO pisa claves ya puestas en `.env`. Flags:
+`--tools` (toolkit OSINT del agente), `--ner` (NER de personas), `--ollama`
+(summarizer local), `--lockdown` (usuario sin-salida-IA + iptables, requiere root),
+`--all`, `--no-venv`, `--no-test`. También `make bootstrap ARGS="--all"`.
+Solo falta poner tu `ANTHROPIC_API_KEY` en `.env`.
+
+### Manual
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e ".[dev]"
 ```
 
 ## 4. Configuración `.env`
@@ -242,8 +257,15 @@ Markdown. Tras `pip install -e .` el comando es `osint-veil`.
 
 Herramientas integradas sin dependencias (`dns_resolve`, `http_headers`). Además,
 **wrappers opcionales de binarios** se activan solos si están instalados:
-pasivos (`subfinder`, `amass`, `whois`) y, con `--allow-active`, activos/intrusivos
-(`nmap`, `amass -active`). Las activas solo bajo autorización del objetivo.
+
+- **Pasivas** (siempre disponibles si el binario está): `subfinder`, `amass -passive`,
+  `assetfinder`, `whois`, `dig` (registros DNS), `dnsrecon`, `theHarvester` (crt.sh).
+- **Activas / intrusivas** (solo con `--allow-active` y autorización del objetivo):
+  `nmap`, `amass -active`, `whatweb`, `wafw00f`, `nuclei`.
+
+Instálalas de golpe con `./setup.sh --tools` (apt + Go). El agente solo puede
+invocar las que estén cableadas aquí; añadir más implica registrar su wrapper en
+`proxy/tools_external.py` (sin shell, target validado).
 
 ```bash
 osint-veil audit --case c --target cliente.com --allow-active   # incluye nmap si está
