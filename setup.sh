@@ -174,6 +174,14 @@ if [ "$WITH_TOOLS" -eq 1 ]; then
   install_apt whois dnsutils nmap dnsrecon theharvester whatweb wafw00f
   install_apt amass || warn "amass no disponible vía apt; instálalo manualmente si lo necesitas."
 
+  # Go es necesario para subfinder/assetfinder/nuclei: lo instalamos si falta.
+  if ! command -v go >/dev/null 2>&1; then
+    info "Go no encontrado: instalando golang…"
+    install_apt golang-go || install_apt golang
+    # apt deja el binario en /usr/lib/go-*/bin o /usr/bin; refresca PATH por si acaso.
+    command -v go >/dev/null 2>&1 || export PATH="/usr/lib/go/bin:/usr/local/go/bin:$PATH"
+  fi
+
   # Vía Go (projectdiscovery / tomnomnom): subfinder, assetfinder, nuclei.
   if command -v go >/dev/null 2>&1; then
     mkdir -p "$HOME/.local/bin"
@@ -191,7 +199,7 @@ if [ "$WITH_TOOLS" -eq 1 ]; then
       *) warn "Añade \$HOME/.local/bin al PATH (export PATH=\$HOME/.local/bin:\$PATH) para los binarios de Go.";;
     esac
   else
-    warn "Go no instalado: subfinder/assetfinder/nuclei omitidos. Instala 'golang-go' y reejecuta --tools."
+    warn "No pude instalar Go: subfinder/assetfinder/nuclei omitidos. Instala 'golang-go' y reejecuta --tools."
   fi
   info "Herramientas del agente detectadas:"
   "$PY" -c "import proxy.tools_external as te; print('  pasivas:', ', '.join(te.available()) or '(ninguna)'); print('  activas:', ', '.join(te.available(allow_active=True)))" || true
@@ -276,6 +284,41 @@ if [ "$RUN_TESTS" -eq 1 ]; then
   info "Ejecutando tests de verificación…"
   "$PY" -m pytest -q || { err "Tests fallaron. Revisa el output."; exit 1; }
   ok "Tests OK."
+fi
+
+# ── 7b. Aviso de API keys de servicios OSINT que faltan ──────────────────
+# Muchas tools (subfinder, nuclei) y OpenOSINT rinden mucho más con keys de
+# terceros. No las pedimos ni guardamos: solo avisamos de cuáles no detectamos
+# en el entorno / .env / openosint.env, con dónde sacarlas (gratis casi todas).
+if [ "$WITH_TOOLS" -eq 1 ] || [ "$WITH_OPENOSINT" -eq 1 ]; then
+  info "Revisando API keys de servicios OSINT (opcionales pero recomendadas)…"
+  _have_key() {  # _have_key VAR  -> 0 si está en el entorno o en un .env con valor
+    local v="$1"
+    [ -n "$(printenv "$v" 2>/dev/null)" ] && return 0
+    grep -Eqs "^${v}=.+" .env openosint.env 2>/dev/null && return 0
+    return 1
+  }
+  # VAR  servicio (dónde obtenerla)
+  _KEYS="SHODAN_API_KEY|Shodan (account.shodan.io)
+VIRUSTOTAL_API_KEY|VirusTotal (virustotal.com/gui/my-apikey)
+CENSYS_API_ID|Censys (search.censys.io/account/api)
+HIBP_API_KEY|HaveIBeenPwned (haveibeenpwned.com/API/Key)
+ABUSEIPDB_API_KEY|AbuseIPDB (abuseipdb.com/account/api)
+SECURITYTRAILS_API_KEY|SecurityTrails (securitytrails.com — subfinder/amass)
+GITHUB_TOKEN|GitHub (github.com/settings/tokens — dorks/code search)"
+  MISSING=0
+  while IFS='|' read -r var desc; do
+    [ -n "$var" ] || continue
+    if _have_key "$var"; then ok "  $var detectada."
+    else warn "  falta $var → $desc"; MISSING=$((MISSING + 1)); fi
+  done <<EOF
+$_KEYS
+EOF
+  if [ "$MISSING" -gt 0 ]; then
+    warn "Faltan $MISSING keys OSINT. Sin ellas el escaneo es más pobre (no es bloqueante)."
+    warn "Ponlas en tu entorno o en openosint.env. subfinder/amass usan además su"
+    warn "propio config (p.ej. ~/.config/subfinder/provider-config.yaml)."
+  fi
 fi
 
 # ── Resumen final ────────────────────────────────────────────────────────

@@ -83,10 +83,13 @@ git clone https://github.com/lameiro0x/osint-veil && cd osint-veil
 ```
 
 `setup.sh` es idempotente y NO pisa claves ya puestas en `.env`. Flags:
-`--tools` (toolkit OSINT del agente), `--ner` (NER de personas), `--ollama`
-(summarizer local), `--lockdown` (usuario sin-salida-IA + iptables, requiere root),
-`--all`, `--no-venv`, `--no-test`. También `make bootstrap ARGS="--all"`.
-Solo falta poner tu `ANTHROPIC_API_KEY` en `.env`.
+`--tools` (toolkit OSINT del agente; instala Go automáticamente si falta),
+`--ner` (NER de personas), `--ollama` (summarizer local),
+`--openosint` (OpenOSINT vía pipx, enrutado al proxy), `--lockdown`
+(usuario sin-salida-IA + iptables, requiere root), `--all`, `--no-venv`, `--no-test`.
+También `make bootstrap ARGS="--all"`. Al final avisa de qué **API keys OSINT**
+(Shodan, VirusTotal, Censys, HIBP, AbuseIPDB, SecurityTrails, GitHub) faltan —
+opcionales pero mejoran mucho el escaneo. Solo falta poner tu `ANTHROPIC_API_KEY` en `.env`.
 
 ### Manual
 

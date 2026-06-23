@@ -14,6 +14,11 @@ Versionado [SemVer](https://semver.org/lang/es/).
   activas (tras `--allow-active`) `whatweb`, `wafw00f`, `nuclei`. Mismo modelo de
   seguridad: sin shell, args como lista, target validado por regex estricto.
 
+- **Go automático** en `setup.sh --tools`: si no está, instala `golang-go` antes de
+  compilar subfinder/assetfinder/nuclei (ya no se omiten por falta de Go).
+- **Aviso de API keys OSINT**: al instalar `--tools`/`--openosint`, el script revisa
+  (sin pedirlas ni guardarlas) qué keys de terceros faltan (Shodan, VirusTotal,
+  Censys, HIBP, AbuseIPDB, SecurityTrails, GitHub) y dónde sacarlas. No es bloqueante.
 - **Integración con OpenOSINT** (`setup.sh --openosint`): instala OpenOSINT aislado
   con pipx y genera `openosint.env` que lo enruta como cliente OpenAI-compatible a
   través del proxy (`OPENAI_BASE_URL` → osint-veil). Así cada mensaje que OpenOSINT
