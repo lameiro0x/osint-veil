@@ -8,7 +8,7 @@ PORT ?= 8000
 .DEFAULT_GOAL := help
 
 .PHONY: help bootstrap install test lint keygen up down logs ps secure-up lockdown serve \
-        ensure-tools-user audit clean
+        ensure-tools-user audit openosint clean
 
 help:  ## Muestra esta ayuda
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -66,6 +66,12 @@ serve:  ## Arranca el proxy en local (enforce + lockdown confirmado)
 audit:  ## OSINT por CLI. Uso: make audit CASE=cliente_a_2026 TARGET=cliente.com
 	@test -n "$(CASE)" -a -n "$(TARGET)" || { echo "Uso: make audit CASE=.. TARGET=.."; exit 2; }
 	PROXY_TOOLS_USER=$(TOOLS_USER) $(PY) -m proxy.cli audit --case $(CASE) --target $(TARGET)
+
+openosint:  ## Lanza OpenOSINT enrutado por el proxy (carga openosint.env). ARGS=".."
+	@test -f openosint.env || { echo "Falta openosint.env. Ejecuta: ./setup.sh --openosint"; exit 2; }
+	@command -v openosint >/dev/null 2>&1 || { echo "OpenOSINT no instalado. Ejecuta: ./setup.sh --openosint"; exit 2; }
+	@echo "→ OpenOSINT vía proxy (http://127.0.0.1:$(PORT)). Asegúrate de que el proxy está arrancado (make up)."
+	set -a; . ./openosint.env; set +a; openosint $(ARGS)
 
 clean:  ## Limpia cachés y artefactos locales (NO toca el vault)
 	rm -rf .pytest_cache .ruff_cache **/__pycache__ informe_*.md
