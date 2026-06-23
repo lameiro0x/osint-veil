@@ -247,6 +247,7 @@ if [ "$WITH_OPENOSINT" -eq 1 ]; then
       echo "# Carga esto antes de lanzar OpenOSINT:  set -a; . ./openosint.env; set +a"
       echo "# Enruta OpenOSINT por osint-veil (OpenAI-compatible). NO pongas aquí una"
       echo "# ANTHROPIC_API_KEY: saltaría el proxy y filtraría datos reales a la IA."
+      echo "# Streaming: nada que configurar — OpenOSINT llama sin stream por esta vía."
       echo "OPENAI_BASE_URL=http://127.0.0.1:8000/v1"
       echo "OPENAI_API_KEY=${PROXY_KEY}"
       echo "OPENAI_MODEL=${PROXY_MODEL}"

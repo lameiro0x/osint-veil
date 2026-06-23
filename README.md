@@ -235,11 +235,13 @@ herramienta** (ahí están los hallazgos sensibles) antes de mandarlo a Claude, 
 contra los objetivos reales (un token no sirve para ejecutar).
 
 `openosint.env` apunta `OPENAI_BASE_URL` al proxy y `OPENAI_API_KEY` a tu
-`PROXY_LOCAL_API_KEY`. Requisitos:
+`PROXY_LOCAL_API_KEY`. Notas:
 
-- **Desactiva el streaming** en OpenOSINT (el proxy responde sin stream; pide `stream=false`).
+- **Streaming: nada que configurar.** OpenOSINT, en modo OpenAI-compatible, llama sin
+  `stream=True` (respuesta completa), justo lo que el proxy espera. (El proxy rechaza
+  `stream=true` como salvaguarda, pero OpenOSINT no lo usa por esa vía.)
 - **No** des a OpenOSINT una `ANTHROPIC_API_KEY` directa: saltaría el proxy y filtraría
-  datos reales.
+  datos reales (usa solo `OPENAI_BASE_URL`/`OPENAI_API_KEY` hacia el proxy).
 - Bajo lockdown, ejecútalo como un usuario sin salida directa a `api.anthropic.com`
   (solo el proxy debe alcanzar la IA).
 
