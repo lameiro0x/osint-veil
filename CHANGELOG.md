@@ -5,6 +5,13 @@ Versionado [SemVer](https://semver.org/lang/es/).
 
 ## [0.1.3] — 2026-06-23
 
+### Cambiado
+- **`.env.example` en modo ahorro por defecto**: `ANTHROPIC_MODEL` = Haiku 4.5
+  (≈5× más barato) y `PROXY_SUMMARIZER=ollama` (resume en local antes de Claude).
+  Documentado spend limit + `dry_run` para validar privacidad sin gastar API.
+- **`make openosint`**: carga `openosint.env` y lanza la REPL de OpenOSINT enrutada
+  por el proxy.
+
 ### Añadido
 - **Instalador de un tirón `setup.sh`** (Kali/Debian/Ubuntu): deps de sistema +
   venv + paquete + `.env` con claves autogeneradas (idempotente, no pisa claves

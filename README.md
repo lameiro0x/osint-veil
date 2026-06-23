@@ -107,11 +107,18 @@ cp .env.example .env
 python -m proxy.keygen
 ```
 
+> **Modo ahorro (por defecto).** `.env.example` viene con `ANTHROPIC_MODEL=claude-haiku-4-5-20251001`
+> (≈5× más barato) y `PROXY_SUMMARIZER=ollama` (resume las salidas de tools en local
+> antes de enviarlas a Claude → menos tokens). Con esto, ~5 USD de créditos API dan
+> para decenas de escaneos de prueba. Sube a `claude-sonnet-4-6`/`claude-opus-4-8`
+> cuando quieras máxima calidad. Pon un **spend limit** en la consola de Anthropic para
+> no pasarte, y usa `"dry_run": true` para validar la privacidad **sin gastar API**.
+
 | Variable               | Para qué                                                       |
 | ---------------------- | -------------------------------------------------------------- |
 | `ANTHROPIC_API_KEY`    | Tu clave de Anthropic (solo se usa al llamar a Claude).        |
 | `ANTHROPIC_BASE_URL`   | `https://api.anthropic.com`.                                   |
-| `ANTHROPIC_MODEL`      | Modelo por defecto (`claude-sonnet-4-6`; puedes usar opus).    |
+| `ANTHROPIC_MODEL`      | Modelo por defecto. Ahorro: Haiku; calidad: sonnet/opus.       |
 | `PROXY_LOCAL_API_KEY`  | Clave que exige el proxy en `Authorization: Bearer ...`.       |
 | `PROXY_CASE_ID`        | Caso por defecto si la petición no envía `case_id`.            |
 | `PROXY_STORAGE_PATH`   | Carpeta de mappings/logs (gitignored).                         |
