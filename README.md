@@ -225,14 +225,23 @@ de sus herramientas, se tokeniza y se le quitan los secretos antes de llegar a C
 ```bash
 ./setup.sh --openosint          # instala OpenOSINT (pipx) y genera openosint.env
 make up                         # arranca el proxy (lockdown auto)
-set -a; . ./openosint.env; set +a
-openosint                       # ya enruta por el proxy
+make openosint                  # carga openosint.env y abre la REPL enrutada
 ```
 
+El proxy implementa un **puente de function calling OpenAI↔Anthropic**: traduce las
+`tools`/`tool_calls` de OpenOSINT a la API de Anthropic, **sanitiza cada resultado de
+herramienta** (ahí están los hallazgos sensibles) antes de mandarlo a Claude, y
+**rehidrata los argumentos** de los `tool_calls` de vuelta para que OpenOSINT ejecute
+contra los objetivos reales (un token no sirve para ejecutar).
+
 `openosint.env` apunta `OPENAI_BASE_URL` al proxy y `OPENAI_API_KEY` a tu
-`PROXY_LOCAL_API_KEY`. **No** des a OpenOSINT una `ANTHROPIC_API_KEY` directa: saltaría
-el proxy y filtraría datos reales. Bajo lockdown, ejecútalo como un usuario sin salida
-directa a `api.anthropic.com` (solo el proxy debe alcanzar la IA).
+`PROXY_LOCAL_API_KEY`. Requisitos:
+
+- **Desactiva el streaming** en OpenOSINT (el proxy responde sin stream; pide `stream=false`).
+- **No** des a OpenOSINT una `ANTHROPIC_API_KEY` directa: saltaría el proxy y filtraría
+  datos reales.
+- Bajo lockdown, ejecútalo como un usuario sin salida directa a `api.anthropic.com`
+  (solo el proxy debe alcanzar la IA).
 
 ### Modo `dry-run` (no llama a Claude)
 

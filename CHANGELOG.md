@@ -5,6 +5,15 @@ Versionado [SemVer](https://semver.org/lang/es/).
 
 ## [0.1.3] — 2026-06-23
 
+### Añadido
+- **Puente de function calling OpenAI↔Anthropic** (`proxy/openai_bridge.py`): el
+  endpoint `/v1/chat/completions` ya acepta `tools`/`tool_calls`/`role:tool`, lo que
+  permite que clientes agénticos como **OpenOSINT funcionen de verdad a través del
+  proxy**. Traduce tools a Anthropic, **sanitiza cada resultado de herramienta** antes
+  de Claude y **rehidrata los argumentos** de los tool_calls salientes para que el
+  cliente ejecute contra los objetivos reales. Streaming no soportado: `stream:true`
+  devuelve 400 (configura el cliente con `stream=false`).
+
 ### Cambiado
 - **`.env.example` en modo ahorro por defecto**: `ANTHROPIC_MODEL` = Haiku 4.5
   (≈5× más barato) y `PROXY_SUMMARIZER=ollama` (resume en local antes de Claude).

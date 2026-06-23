@@ -60,6 +60,81 @@ def test_chat_dry_run_no_llama_a_claude():
     assert body["censored"]
 
 
+def test_chat_tools_dry_run_sanitiza_tool_results():
+    payload = {
+        "case_id": "dry_case",
+        "dry_run": True,
+        "tools": [{"type": "function", "function": {
+            "name": "whois", "parameters": {"type": "object",
+            "properties": {"domain": {"type": "string"}}}}}],
+        "messages": [
+            {"role": "user", "content": "investiga cliente.com"},
+            {"role": "assistant", "content": None, "tool_calls": [
+                {"id": "c1", "type": "function",
+                 "function": {"name": "whois", "arguments": "{\"domain\": \"cliente.com\"}"}}]},
+            {"role": "tool", "tool_call_id": "c1", "content": "admin@cliente.com en 10.0.0.5"},
+        ],
+    }
+    r = client.post("/v1/chat/completions", json=payload, headers=AUTH)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["object"] == "chat.completion.dryrun"
+    joined = str(body["sanitized_messages"])
+    assert "admin@cliente.com" not in joined  # el tool_result se anonimiza
+    assert "10.0.0.5" not in joined
+    assert body["tools"][0]["name"] == "whois"  # tools traducidas a Anthropic
+
+
+def test_chat_tools_rehidrata_argumentos(monkeypatch):
+    import re
+
+    import proxy.app as appmod
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        def run_turn(self, *, system, messages, tools, model=None, max_tokens=4000):
+            # El proxy debe haber tokenizado el dominio antes de llegar aquí.
+            assert "cliente.com" not in str(messages)
+            m = re.search(r"[A-Z_]+_\d+", str(messages))  # el token del dominio
+            assert m, f"no se tokenizó el dominio: {messages}"
+            return {
+                "content": [
+                    {"type": "text", "text": "Enumero subdominios"},
+                    {"type": "tool_use", "id": "tu1", "name": "subfinder",
+                     "input": {"domain": m.group(0)}},
+                ],
+                "stop_reason": "tool_use",
+                "usage": {"input_tokens": 10, "output_tokens": 5},
+            }
+
+    monkeypatch.setattr(appmod, "ClaudeClient", FakeClient)
+    monkeypatch.setattr(appmod.get_settings(), "anthropic_api_key", "sk-test", raising=False)
+
+    payload = {
+        "case_id": "tools_case",
+        "tools": [{"type": "function", "function": {
+            "name": "subfinder",
+            "parameters": {"type": "object", "properties": {"domain": {"type": "string"}}}}}],
+        "messages": [{"role": "user", "content": "investiga cliente.com"}],
+    }
+    r = client.post("/v1/chat/completions", json=payload, headers=AUTH)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["choices"][0]["finish_reason"] == "tool_calls"
+    args = body["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"]
+    # El argumento sale REHIDRATADO: el cliente ejecuta contra el objetivo real.
+    assert "cliente.com" in args
+    assert "DOMAIN_" not in args
+
+
+def test_chat_stream_rechazado():
+    r = client.post("/v1/chat/completions", headers=AUTH,
+                    json={"stream": True, "messages": [{"role": "user", "content": "hola"}]})
+    assert r.status_code == 400
+
+
 def test_mappings_y_audit():
     case = "mapcase"
     client.post("/privacy/sanitize",

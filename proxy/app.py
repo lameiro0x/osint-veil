@@ -23,6 +23,12 @@ from .egress import EgressNotLocked
 from .gateway import ToolGateway, builtin_tools
 from .jobs import manager as job_manager
 from .logging_setup import setup_logging
+from .openai_bridge import (
+    anthropic_to_oai_message,
+    append_glossary,
+    oai_messages_to_anthropic,
+    oai_tools_to_anthropic,
+)
 from .orchestrator import Budget, Orchestrator
 from .report import build_report, review_queue
 from .sanitizer import Sanitizer
@@ -81,7 +87,10 @@ class RehydrateRequest(BaseModel):
 
 class ChatMessage(BaseModel):
     role: str
-    content: Any
+    content: Any = None
+    tool_calls: list[dict] | None = None  # asistente: function calling (OpenAI)
+    tool_call_id: str | None = None       # role:tool: a qué tool_call responde
+    name: str | None = None
 
 
 class ChatRequest(BaseModel):
@@ -91,6 +100,9 @@ class ChatRequest(BaseModel):
     max_tokens: int = 2000
     case_id: str | None = None
     dry_run: bool = False
+    tools: list[dict] | None = None       # function calling (clientes agénticos)
+    tool_choice: Any | None = None
+    stream: bool = False
 
 
 class OsintRequest(BaseModel):
@@ -280,6 +292,23 @@ def chat_completions(req: ChatRequest) -> dict[str, Any]:
     case_id = _resolve_case_id(req.case_id)
     case = get_case_config(case_id)
     store = CaseStore(case_id)
+
+    # El proxy no hace streaming: el cliente debe pedir stream=false. (Evita que un
+    # cliente con stream=true reciba un JSON que su parser SSE no entiende.)
+    if req.stream:
+        raise HTTPException(
+            status_code=400,
+            detail="Streaming no soportado. Configura el cliente con stream=false.",
+        )
+
+    # Modo agéntico (OpenOSINT u otros con function calling): si hay tools o el
+    # historial trae tool_calls/tool results, usa el puente OpenAI↔Anthropic.
+    tools_mode = bool(req.tools) or any(
+        m.tool_calls or m.tool_call_id for m in req.messages
+    )
+    if tools_mode:
+        return _chat_with_tools(req, settings, case, store)
+
     sanitizer = Sanitizer(store, case)
 
     # 1-7. Sanitizar cada mensaje ANTES de cualquier llamada externa.
@@ -365,6 +394,75 @@ def chat_completions(req: ChatRequest) -> dict[str, Any]:
             }
         ],
         "usage": answer["usage"],
+    }
+
+
+def _chat_with_tools(req: ChatRequest, settings: Settings, case,
+                     store: CaseStore) -> dict[str, Any]:
+    """Camino agéntico: traduce OpenAI↔Anthropic con function calling y privacidad.
+
+    Sanitiza todo lo entrante (incl. resultados de herramientas) y rehidrata los
+    argumentos de los tool_calls salientes para que el cliente ejecute contra los
+    objetivos reales.
+    """
+    sanitizer = Sanitizer(store, case)
+    counts: dict[str, int] = {}
+    anns: dict[str, str] = {}
+
+    def _san(text: str) -> str:
+        if not text:
+            return ""
+        r = sanitizer.sanitize(text)
+        for k, v in r.type_counts.items():
+            counts[k] = counts.get(k, 0) + v
+        anns.update(r.annotations)
+        return r.sanitized_text
+
+    msgs = [m.model_dump() for m in req.messages]
+    system, convo = oai_messages_to_anthropic(msgs, _san)
+    a_tools = oai_tools_to_anthropic(req.tools)
+    append_glossary(convo, Sanitizer.render_annotations(anns))
+
+    if req.dry_run:
+        store.write_audit(type_counts=counts, provider=case.provider,
+                          mode=case.mode, dry_run=True)
+        return {
+            "id": f"dryrun-{uuid.uuid4().hex[:12]}",
+            "object": "chat.completion.dryrun",
+            "created": int(time.time()),
+            "model": req.model or case.model,
+            "sanitized_messages": convo,
+            "system": system,
+            "tools": a_tools,
+            "censored": counts,
+            "annotations": anns,
+        }
+
+    if not settings.anthropic_api_key:
+        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY no configurada.")
+
+    client = ClaudeClient(settings)
+    turn = client.run_turn(system=system, messages=convo, tools=a_tools or None,
+                           model=req.model or case.model, max_tokens=req.max_tokens)
+
+    rehydrate_text = bool(case.rehydrate_output and case.mode == "reporting")
+    message, finish = anthropic_to_oai_message(
+        turn["content"], store.rehydrate, rehydrate_text=rehydrate_text)
+
+    store.write_audit(type_counts=counts, provider=case.provider,
+                      mode=case.mode, dry_run=False)
+    u = turn["usage"]
+    return {
+        "id": f"chatcmpl-{uuid.uuid4().hex[:12]}",
+        "object": "chat.completion",
+        "created": int(time.time()),
+        "model": req.model or case.model,
+        "choices": [{"index": 0, "message": message, "finish_reason": finish}],
+        "usage": {
+            "prompt_tokens": u["input_tokens"],
+            "completion_tokens": u["output_tokens"],
+            "total_tokens": u["input_tokens"] + u["output_tokens"],
+        },
     }
 
 
