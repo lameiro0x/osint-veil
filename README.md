@@ -205,6 +205,25 @@ curl -X POST http://127.0.0.1:8000/v1/chat/completions \
 El proxy sanitiza los mensajes, llama a Claude solo con tokens, y devuelve una
 respuesta en formato OpenAI (`choices[].message.content`).
 
+### Con OpenOSINT (recomendado)
+
+[OpenOSINT](https://github.com/OpenOSINT/OpenOSINT) es un agente OSINT con 18
+herramientas que habla OpenAI-compatible. Ponlo **detrás de osint-veil** para que
+todo lo que envíe a la IA pase por el sanitizador (cada mensaje, incluida la salida
+de sus herramientas, se tokeniza y se le quitan los secretos antes de llegar a Claude).
+
+```bash
+./setup.sh --openosint          # instala OpenOSINT (pipx) y genera openosint.env
+make up                         # arranca el proxy (lockdown auto)
+set -a; . ./openosint.env; set +a
+openosint                       # ya enruta por el proxy
+```
+
+`openosint.env` apunta `OPENAI_BASE_URL` al proxy y `OPENAI_API_KEY` a tu
+`PROXY_LOCAL_API_KEY`. **No** des a OpenOSINT una `ANTHROPIC_API_KEY` directa: saltaría
+el proxy y filtraría datos reales. Bajo lockdown, ejecútalo como un usuario sin salida
+directa a `api.anthropic.com` (solo el proxy debe alcanzar la IA).
+
 ### Modo `dry-run` (no llama a Claude)
 
 Añade `"dry_run": true` para ver qué se censuraría sin gastar la API:

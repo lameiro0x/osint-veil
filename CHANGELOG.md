@@ -14,9 +14,17 @@ Versionado [SemVer](https://semver.org/lang/es/).
   activas (tras `--allow-active`) `whatweb`, `wafw00f`, `nuclei`. Mismo modelo de
   seguridad: sin shell, args como lista, target validado por regex estricto.
 
+- **Integración con OpenOSINT** (`setup.sh --openosint`): instala OpenOSINT aislado
+  con pipx y genera `openosint.env` que lo enruta como cliente OpenAI-compatible a
+  través del proxy (`OPENAI_BASE_URL` → osint-veil). Así cada mensaje que OpenOSINT
+  manda a la IA se sanitiza (tokeniza + sin secretos) antes de llegar a Claude. El
+  `.gitignore` excluye `openosint.env` (contiene la clave local del proxy).
+
 ### Corregido
 - `setup.sh`: el reemplazo de claves en `.env` usa callback en `re.sub` para que
   backslashes o `\1` dentro del valor no se interpreten como backreferences.
+- `tools_external.py`: detección de binario tolerante a alias (p.ej.
+  `theHarvester`/`theharvester`); mensajes de error muestran el binario real, no `sudo`.
 
 ## [0.1.2] — 2026-06-19
 

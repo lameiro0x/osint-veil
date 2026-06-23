@@ -27,7 +27,7 @@ warn() { printf "${C_Y}[!]${C_0} %s\n" "$*"; }
 err()  { printf "${C_R}[x]${C_0} %s\n" "$*" >&2; }
 
 # ── Flags ────────────────────────────────────────────────────────────────
-WITH_TOOLS=0; WITH_NER=0; WITH_OLLAMA=0; WITH_LOCKDOWN=0; RUN_TESTS=1; USE_VENV=1
+WITH_TOOLS=0; WITH_NER=0; WITH_OLLAMA=0; WITH_OPENOSINT=0; WITH_LOCKDOWN=0; RUN_TESTS=1; USE_VENV=1
 TOOLS_USER="${TOOLS_USER:-osinttools}"
 
 usage() {
@@ -38,8 +38,9 @@ Opciones:
   --tools       Instala binarios OSINT (whois, dnsutils, nmap, amass, subfinder)
   --ner         Instala NER de personas (spaCy + modelo es_core_news_sm)
   --ollama      Instala Ollama + modelo local para el summarizer opcional
+  --openosint   Instala OpenOSINT (aislado con pipx) y genera openosint.env
   --lockdown    Crea usuario '$TOOLS_USER' y aplica el egress lockdown (requiere root/sudo)
-  --all         Equivale a --tools --ner --ollama --lockdown
+  --all         Equivale a --tools --ner --ollama --openosint --lockdown
   --no-venv     No crear venv; instala en el Python actual
   --no-test     No ejecutar la batería de tests al final
   -h, --help    Esta ayuda
@@ -51,8 +52,9 @@ for arg in "$@"; do
     --tools) WITH_TOOLS=1 ;;
     --ner) WITH_NER=1 ;;
     --ollama) WITH_OLLAMA=1 ;;
+    --openosint) WITH_OPENOSINT=1 ;;
     --lockdown) WITH_LOCKDOWN=1 ;;
-    --all) WITH_TOOLS=1; WITH_NER=1; WITH_OLLAMA=1; WITH_LOCKDOWN=1 ;;
+    --all) WITH_TOOLS=1; WITH_NER=1; WITH_OLLAMA=1; WITH_OPENOSINT=1; WITH_LOCKDOWN=1 ;;
     --no-venv) USE_VENV=0 ;;
     --no-test) RUN_TESTS=0 ;;
     -h|--help) usage; exit 0 ;;
@@ -211,6 +213,45 @@ if [ "$WITH_OLLAMA" -eq 1 ]; then
   fi
 fi
 
+# ── 5b. OpenOSINT (opcional) cableado contra el proxy ────────────────────
+# OpenOSINT es el agente OSINT (18 herramientas). Se instala AISLADO con pipx
+# para no chocar con las dependencias del proxy. Se configura como cliente
+# OpenAI-compatible apuntando a osint-veil: así TODO lo que mande a la IA pasa
+# por el sanitizador. NUNCA se le da una ANTHROPIC_API_KEY directa (saltaría el
+# proxy y filtraría datos reales).
+if [ "$WITH_OPENOSINT" -eq 1 ]; then
+  info "Instalando OpenOSINT (aislado con pipx)…"
+  if ! command -v pipx >/dev/null 2>&1; then
+    install_apt pipx || "$PY" -m pip install --user pipx || warn "No pude instalar pipx."
+    command -v pipx >/dev/null 2>&1 && pipx ensurepath >/dev/null 2>&1 || true
+  fi
+  if command -v pipx >/dev/null 2>&1; then
+    pipx install openosint || pipx upgrade openosint || warn "No pude instalar OpenOSINT con pipx."
+  else
+    warn "Sin pipx: instala OpenOSINT a mano con 'pipx install openosint' o 'pip install openosint'."
+  fi
+
+  # Genera openosint.env: apunta OpenOSINT al proxy (OpenAI-compatible).
+  PROXY_KEY="$(grep -E '^PROXY_LOCAL_API_KEY=' .env | cut -d= -f2- || true)"
+  PROXY_MODEL="$(grep -E '^ANTHROPIC_MODEL=' .env | cut -d= -f2- || true)"; PROXY_MODEL="${PROXY_MODEL:-claude-sonnet-4-6}"
+  if [ ! -f openosint.env ]; then
+    {
+      echo "# Carga esto antes de lanzar OpenOSINT:  set -a; . ./openosint.env; set +a"
+      echo "# Enruta OpenOSINT por osint-veil (OpenAI-compatible). NO pongas aquí una"
+      echo "# ANTHROPIC_API_KEY: saltaría el proxy y filtraría datos reales a la IA."
+      echo "OPENAI_BASE_URL=http://127.0.0.1:8000/v1"
+      echo "OPENAI_API_KEY=${PROXY_KEY}"
+      echo "OPENAI_MODEL=${PROXY_MODEL}"
+    } > openosint.env
+    chmod 600 openosint.env
+    ok "Generado openosint.env (apunta OpenOSINT al proxy)."
+  else
+    ok "openosint.env ya existe (no lo sobrescribo)."
+  fi
+  warn "Privacidad: con el proxy arrancado, lanza OpenOSINT con OPENAI_BASE_URL al proxy."
+  warn "Bajo lockdown, ejecuta OpenOSINT como un usuario SIN salida directa a api.anthropic.com."
+fi
+
 # ── 6. Egress lockdown opcional (requiere privilegios) ───────────────────
 if [ "$WITH_LOCKDOWN" -eq 1 ]; then
   if [ -z "$SUDO" ] && [ "$(id -u)" -ne 0 ]; then
@@ -253,3 +294,6 @@ echo "  # arrancar API:        make up           (Docker, lockdown auto)"
 echo "  # o bare-metal seguro: make secure-up"
 echo "  # OSINT por CLI:       make audit CASE=prueba_2026 TARGET=ejemplo.com"
 echo "  # health:              curl -s 127.0.0.1:8000/health"
+if [ "$WITH_OPENOSINT" -eq 1 ]; then
+  echo "  # OpenOSINT vía proxy: set -a; . ./openosint.env; set +a; openosint"
+fi
