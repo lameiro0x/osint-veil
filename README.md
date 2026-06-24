@@ -79,17 +79,21 @@ Módulos (`proxy/`):
 
 ```bash
 git clone https://github.com/lameiro0x/osint-veil && cd osint-veil
-./setup.sh --all        # deps + venv + paquete + .env con claves + toolkit + Ollama + lockdown
+./setup.sh --all        # instala TODO, preguntando antes de cada pieza pesada
+# o totalmente desatendido:
+./setup.sh --all -y
 ```
 
-`setup.sh` es idempotente y NO pisa claves ya puestas en `.env`. Flags:
-`--tools` (toolkit OSINT del agente; instala Go automáticamente si falta),
-`--ner` (NER de personas), `--ollama` (summarizer local),
-`--openosint` (OpenOSINT vía pipx, enrutado al proxy), `--lockdown`
-(usuario sin-salida-IA + iptables, requiere root), `--all`, `--no-venv`, `--no-test`.
-También `make bootstrap ARGS="--all"`. Al final avisa de qué **API keys OSINT**
-(Shodan, VirusTotal, Censys, HIBP, AbuseIPDB, SecurityTrails, GitHub) faltan —
-opcionales pero mejoran mucho el escaneo. Solo falta poner tu `ANTHROPIC_API_KEY` en `.env`.
+Instala: deps de sistema + venv + paquete + `.env` con claves autogeneradas, y te
+**pregunta (con sus alternativas)** por cada extra: toolkit OSINT (Go incluido),
+NER, **Ollama + modelo** (summarizer), **OpenOSINT**, **Docker**, y lockdown de red.
+Además ofrece **pegar tu `ANTHROPIC_API_KEY`** en el momento. Si rechazas Ollama,
+deja `PROXY_SUMMARIZER=off` solo. Al final imprime una **guía de próximos pasos**
+adaptada a lo instalado.
+
+`setup.sh` es idempotente y NO pisa claves ya puestas en `.env`. Flags sueltos:
+`--tools --ner --ollama --openosint --docker --lockdown`, `--yes/-y` (responde sí a
+todo), `--no-venv`, `--no-test`. También `make bootstrap ARGS="--all"`.
 
 ### Manual
 

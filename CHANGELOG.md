@@ -15,6 +15,13 @@ Versionado [SemVer](https://semver.org/lang/es/).
   devuelve 400 (configura el cliente con `stream=false`).
 
 ### Cambiado
+- **`setup.sh` guiado y completo**: `--all` ahora instala TODO incluido **Docker** y
+  **Ollama + modelo** (pull), **preguntando antes de cada pieza pesada** con sus
+  alternativas explicadas. Nuevo `--yes/-y` (desatendido). Instalación de Ollama
+  robusta: arranca el daemon, espera a que responda, hace `pull` con reintento y
+  **verifica** el modelo (si falla, deja `PROXY_SUMMARIZER=off` solo). Ofrece pegar
+  la `ANTHROPIC_API_KEY` en el momento (oculta). Guía final de "próximos pasos"
+  adaptada a lo instalado (Docker→`make up`, si no `make run`; avisa si falta la key).
 - **`.env.example` en modo ahorro por defecto**: `ANTHROPIC_MODEL` = Haiku 4.5
   (≈5× más barato) y `PROXY_SUMMARIZER=ollama` (resume en local antes de Claude).
   Documentado spend limit + `dry_run` para validar privacidad sin gastar API.
