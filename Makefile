@@ -7,8 +7,11 @@ PORT ?= 8000
 
 .DEFAULT_GOAL := help
 
-.PHONY: help bootstrap install test lint keygen up down logs ps secure-up lockdown serve \
+.PHONY: help bootstrap install test lint keygen run up down logs ps secure-up lockdown serve \
         ensure-tools-user audit openosint clean
+
+# Usa el python del venv si existe; si no, el del sistema.
+VENV_PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo $(PY))
 
 help:  ## Muestra esta ayuda
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -31,7 +34,12 @@ lint:  ## Linter (ruff)
 keygen:  ## Genera una clave de cifrado para PROXY_ENCRYPTION_KEY
 	@$(PY) -m proxy.keygen
 
-# ── Despliegue Docker (recomendado, lockdown automático) ──────────────
+# ── Arranque local sin Docker (rápido, sin root) ──────────────────────
+run:  ## Arranca el proxy en local sin Docker (modo warn). No necesita root.
+	@echo "→ http://127.0.0.1:$(PORT)   (Ctrl+C para parar)"
+	$(VENV_PY) -m uvicorn proxy.app:app --host 127.0.0.1 --port $(PORT)
+
+# ── Despliegue Docker (lockdown automático) ───────────────────────────
 up:  ## Construye y arranca en Docker con egress lockdown (de un tirón)
 	docker compose up --build -d
 	@echo "→ http://127.0.0.1:$(PORT)   (health: curl -s 127.0.0.1:$(PORT)/health)"

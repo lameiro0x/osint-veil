@@ -148,10 +148,15 @@ sensitive_keywords:
 ## 5. Cómo arrancarlo
 
 ```bash
-./run.sh
-# o:
-uvicorn proxy.app:app --host 127.0.0.1 --port 8000
+make run          # sin Docker, sin root (modo warn) — lo más rápido para probar
+# o con Docker (lockdown automático):
+make up
+# o bare-metal con lockdown de red (enforce, requiere root):
+make secure-up
 ```
+
+Docker es opcional: `make run` no lo necesita. `setup.sh` pregunta si quieres
+instalar Docker (o fuérzalo con `./setup.sh --docker`).
 
 ## 6. Probar `/health`
 

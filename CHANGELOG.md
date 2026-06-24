@@ -20,6 +20,10 @@ Versionado [SemVer](https://semver.org/lang/es/).
   Documentado spend limit + `dry_run` para validar privacidad sin gastar API.
 - **`make openosint`**: carga `openosint.env` y lanza la REPL de OpenOSINT enrutada
   por el proxy.
+- **`make run`**: arranca el proxy en local sin Docker ni root (modo warn); usa el
+  venv si existe. Camino más rápido para probar.
+- **Docker opcional en `setup.sh`**: pregunta si instalarlo (o `--docker` para forzar);
+  ya no se asume Docker para arrancar (bare-metal con `make run`).
 
 ### Añadido
 - **Instalador de un tirón `setup.sh`** (Kali/Debian/Ubuntu): deps de sistema +

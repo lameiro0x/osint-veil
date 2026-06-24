@@ -28,6 +28,7 @@ err()  { printf "${C_R}[x]${C_0} %s\n" "$*" >&2; }
 
 # ── Flags ────────────────────────────────────────────────────────────────
 WITH_TOOLS=0; WITH_NER=0; WITH_OLLAMA=0; WITH_OPENOSINT=0; WITH_LOCKDOWN=0; RUN_TESTS=1; USE_VENV=1
+WITH_DOCKER=0  # --docker fuerza instalar Docker sin preguntar
 TOOLS_USER="${TOOLS_USER:-osinttools}"
 
 usage() {
@@ -39,8 +40,10 @@ Opciones:
   --ner         Instala NER de personas (spaCy + modelo es_core_news_sm)
   --ollama      Instala Ollama + modelo local para el summarizer opcional
   --openosint   Instala OpenOSINT (aislado con pipx) y genera openosint.env
+  --docker      Instala Docker sin preguntar (por defecto se pregunta si hay terminal)
   --lockdown    Crea usuario '$TOOLS_USER' y aplica el egress lockdown (requiere root/sudo)
   --all         Equivale a --tools --ner --ollama --openosint --lockdown
+                (Docker NO va en --all: se pregunta aparte, o fuérzalo con --docker)
   --no-venv     No crear venv; instala en el Python actual
   --no-test     No ejecutar la batería de tests al final
   -h, --help    Esta ayuda
@@ -53,6 +56,7 @@ for arg in "$@"; do
     --ner) WITH_NER=1 ;;
     --ollama) WITH_OLLAMA=1 ;;
     --openosint) WITH_OPENOSINT=1 ;;
+    --docker) WITH_DOCKER=1 ;;
     --lockdown) WITH_LOCKDOWN=1 ;;
     --all) WITH_TOOLS=1; WITH_NER=1; WITH_OLLAMA=1; WITH_OPENOSINT=1; WITH_LOCKDOWN=1 ;;
     --no-venv) USE_VENV=0 ;;
@@ -261,6 +265,38 @@ if [ "$WITH_OPENOSINT" -eq 1 ]; then
   warn "Bajo lockdown, ejecuta OpenOSINT como un usuario SIN salida directa a api.anthropic.com."
 fi
 
+# ── 5c. Docker (OPCIONAL) para 'make up' ─────────────────────────────────
+# Bare-metal ('make run') NO necesita Docker. Solo se instala si lo pides
+# (--docker) o si lo confirmas en el prompt. Nunca va dentro de --all.
+install_docker() {
+    info "Instalando Docker…"
+    install_apt docker.io docker-compose-plugin
+    if command -v systemctl >/dev/null 2>&1; then
+        $SUDO systemctl enable --now docker 2>/dev/null \
+            || warn "No pude habilitar el servicio docker (arráncalo a mano)."
+    fi
+    if $SUDO usermod -aG docker "$(id -un)" 2>/dev/null; then
+        warn "Te añadí al grupo 'docker': cierra sesión y entra de nuevo (o 'newgrp docker')."
+    fi
+    command -v docker >/dev/null 2>&1 && ok "Docker instalado ('make up' disponible)." \
+        || warn "Docker no quedó disponible."
+}
+
+if command -v docker >/dev/null 2>&1; then
+    ok "Docker ya instalado ('make up' disponible)."
+elif [ "$WITH_DOCKER" -eq 1 ]; then
+    install_docker
+elif [ -t 0 ]; then
+    printf "¿Instalar Docker para usar 'make up'? Bare-metal ('make run') no lo necesita [y/N] "
+    read -r _ans || _ans=""
+    case "$_ans" in
+        [yYsS]*) install_docker ;;
+        *) info "Sin Docker. Arranca con 'make run' (bare-metal, sin root)." ;;
+    esac
+else
+    info "Docker no instalado. Usa 'make run' (bare-metal) o reejecuta con --docker."
+fi
+
 # ── 6. Egress lockdown opcional (requiere privilegios) ───────────────────
 if [ "$WITH_LOCKDOWN" -eq 1 ]; then
   if [ -z "$SUDO" ] && [ "$(id -u)" -ne 0 ]; then
@@ -334,8 +370,9 @@ if [ "$HAS_KEY" -eq 0 ]; then
 fi
 echo "Siguiente:"
 [ "$USE_VENV" -eq 1 ] && echo "  source .venv/bin/activate"
-echo "  # arrancar API:        make up           (Docker, lockdown auto)"
-echo "  # o bare-metal seguro: make secure-up"
+echo "  # arrancar (sin Docker): make run         (rápido, sin root)"
+echo "  # o con Docker:          make up          (lockdown auto)"
+echo "  # o bare-metal seguro:   make secure-up   (lockdown enforce, root)"
 echo "  # OSINT por CLI:       make audit CASE=prueba_2026 TARGET=ejemplo.com"
 echo "  # health:              curl -s 127.0.0.1:8000/health"
 if [ "$WITH_OPENOSINT" -eq 1 ]; then
