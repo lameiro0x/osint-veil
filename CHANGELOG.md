@@ -23,7 +23,11 @@ Versionado [SemVer](https://semver.org/lang/es/).
 - **`make run`**: arranca el proxy en local sin Docker ni root (modo warn); usa el
   venv si existe. Camino más rápido para probar.
 - **Docker opcional en `setup.sh`**: pregunta si instalarlo (o `--docker` para forzar);
-  ya no se asume Docker para arrancar (bare-metal con `make run`).
+  ya no se asume Docker para arrancar (bare-metal con `make run`). Instala el paquete
+  correcto en Kali/Debian (`docker.io` + `docker-compose-v2`, con fallback a
+  `docker-compose` v1).
+- **Makefile detecta Compose**: `up/down/logs/ps` usan `docker compose` (v2) o
+  `docker-compose` (v1) según lo instalado, y anteponen `sudo` si hace falta.
 
 ### Añadido
 - **Instalador de un tirón `setup.sh`** (Kali/Debian/Ubuntu): deps de sistema +

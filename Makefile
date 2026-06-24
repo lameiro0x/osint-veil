@@ -13,6 +13,11 @@ PORT ?= 8000
 # Usa el python del venv si existe; si no, el del sistema.
 VENV_PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo $(PY))
 
+# Detecta el comando de Compose: plugin v2 ('docker compose') o standalone v1
+# ('docker-compose'). Antepone sudo si el usuario no está en el grupo 'docker'.
+SUDO := $(shell docker info >/dev/null 2>&1 || echo sudo)
+COMPOSE := $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
+
 help:  ## Muestra esta ayuda
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 	  | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -41,17 +46,17 @@ run:  ## Arranca el proxy en local sin Docker (modo warn). No necesita root.
 
 # ── Despliegue Docker (lockdown automático) ───────────────────────────
 up:  ## Construye y arranca en Docker con egress lockdown (de un tirón)
-	docker compose up --build -d
+	$(SUDO) $(COMPOSE) up --build -d
 	@echo "→ http://127.0.0.1:$(PORT)   (health: curl -s 127.0.0.1:$(PORT)/health)"
 
 down:  ## Para y elimina los contenedores
-	docker compose down
+	$(SUDO) $(COMPOSE) down
 
 logs:  ## Sigue los logs del contenedor
-	docker compose logs -f
+	$(SUDO) $(COMPOSE) logs -f
 
 ps:  ## Estado de los contenedores
-	docker compose ps
+	$(SUDO) $(COMPOSE) ps
 
 # ── Despliegue bare-metal (sin Docker) ────────────────────────────────
 secure-up: ensure-tools-user lockdown serve  ## Bare-metal de un tirón: usuario + lockdown + arranque

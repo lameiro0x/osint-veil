@@ -270,7 +270,13 @@ fi
 # (--docker) o si lo confirmas en el prompt. Nunca va dentro de --all.
 install_docker() {
     info "Instalando Docker…"
-    install_apt docker.io docker-compose-plugin
+    # En Debian/Kali el plugin Compose v2 es 'docker-compose-v2' (NO el
+    # 'docker-compose-plugin' del repo oficial). Fallback al standalone v1.
+    install_apt docker.io docker-compose-v2
+    if ! docker compose version >/dev/null 2>&1; then
+        warn "Compose v2 no disponible; instalo el standalone 'docker-compose' (v1)."
+        install_apt docker-compose
+    fi
     if command -v systemctl >/dev/null 2>&1; then
         $SUDO systemctl enable --now docker 2>/dev/null \
             || warn "No pude habilitar el servicio docker (arráncalo a mano)."
