@@ -76,9 +76,9 @@ serve:  ## Arranca el proxy en local (enforce + lockdown confirmado)
 	  $(PY) -m uvicorn proxy.app:app --host 127.0.0.1 --port $(PORT)
 
 # ── CLI / utilidades ──────────────────────────────────────────────────
-audit:  ## OSINT por CLI. Uso: make audit CASE=cliente_a_2026 TARGET=cliente.com
+audit:  ## OSINT por CLI (usa Claude + summarizer Ollama). Uso: make audit CASE=.. TARGET=..
 	@test -n "$(CASE)" -a -n "$(TARGET)" || { echo "Uso: make audit CASE=.. TARGET=.."; exit 2; }
-	PROXY_TOOLS_USER=$(TOOLS_USER) $(PY) -m proxy.cli audit --case $(CASE) --target $(TARGET)
+	PROXY_TOOLS_USER=$(TOOLS_USER) $(VENV_PY) -m proxy.cli audit --case $(CASE) --target $(TARGET)
 
 openosint:  ## Lanza OpenOSINT enrutado por el proxy (carga openosint.env). ARGS=".."
 	@test -f openosint.env || { echo "Falta openosint.env. Ejecuta: ./setup.sh --openosint"; exit 2; }
