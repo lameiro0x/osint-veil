@@ -5,6 +5,8 @@
 openosint.env
 proxy_data/
 *.enc
+*.pptx
+informe_*.md
 
 # Casos reales de clientes (pueden contener dominios/keywords sensibles).
 # Se versiona solo el ejemplo.
