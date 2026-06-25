@@ -25,6 +25,19 @@ def test_report_rehidratado_local():
     assert "Privacidad — qué se censuró" in md or "Hallazgos de alta relevancia" in md
 
 
+def test_report_inventario_de_activos():
+    """El informe lista los activos descubiertos por tipo con valores reales."""
+    store, case = _populated_store()
+    md = build_report(store, case, analysis="", rehydrate=True)
+    assert "Activos descubiertos" in md
+    assert "vpn-corp-backup.cliente.com" in md
+    assert "10.0.0.9" in md
+    # En modo anónimo, el inventario muestra tokens, no valores reales.
+    anon = build_report(store, case, analysis="", rehydrate=False)
+    assert "Activos descubiertos" in anon
+    assert "vpn-corp-backup.cliente.com" not in anon
+
+
 def test_report_anonimo_no_rehidrata():
     store, case = _populated_store()
     md = build_report(store, case, analysis="SUBDOMAIN_001 es prioritario", rehydrate=False)

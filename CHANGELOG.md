@@ -14,7 +14,19 @@ Versionado [SemVer](https://semver.org/lang/es/).
   cliente ejecute contra los objetivos reales. Streaming no soportado: `stream:true`
   devuelve 400 (configura el cliente con `stream=false`).
 
+### Corregido
+- **El OSINT ya no se corta sin análisis**: el summarizer en CPU podía tardar más que
+  su timeout y **agotar el presupuesto de tiempo**, dejando el informe en
+  "(sin análisis)". Ahora: (1) la entrada al summarizer se **trunca**
+  (`PROXY_SUMMARIZER_MAX_CHARS`, def. 6000) y mantiene el modelo cargado
+  (`keep_alive`) → resúmenes rápidos y fiables; (2) presupuesto mayor (20 iter,
+  900 s); (3) **análisis final garantizado**: al agotar el límite se hace UNA
+  llamada sin herramientas que SIEMPRE entrega el informe.
+
 ### Cambiado
+- **Informe más legible**: nueva sección **"Activos descubiertos"** que agrupa los
+  hallazgos por tipo (subdominios, IPs, URLs, emails…) con sus valores reales (en
+  local). La CLI `audit` también imprime una tabla-resumen de activos al terminar.
 - **`setup.sh` guiado y completo**: `--all` ahora instala TODO incluido **Docker** y
   **Ollama + modelo** (pull), **preguntando antes de cada pieza pesada** con sus
   alternativas explicadas. Nuevo `--yes/-y` (desatendido). Instalación de Ollama

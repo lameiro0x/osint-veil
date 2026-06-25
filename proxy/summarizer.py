@@ -60,11 +60,19 @@ def summarize(text: str, settings: Settings) -> str | None:
 
     # Defensa extra: el texto ya viene sanitizado, pero re-escaneamos secretos.
     safe_input, _ = scrub_secrets(text)
+    # Trunca la entrada: en CPU, resumir 20k chars puede tardar minutos y agotar el
+    # presupuesto de tiempo del OSINT. Con un tope, el resumen es rápido y fiable.
+    max_chars = max(settings.summarizer_min_chars, settings.summarizer_max_chars)
+    if len(safe_input) > max_chars:
+        safe_input = safe_input[:max_chars] + "\n[...entrada truncada para el resumen...]"
     payload = {
         "model": settings.summarizer_model,
         "prompt": _PROMPT.format(text=safe_input),
         "stream": False,
-        "options": {"temperature": 0.1},
+        # keep_alive: deja el modelo cargado entre llamadas (evita recargas lentas).
+        # num_predict: acota la longitud del resumen para que sea ágil.
+        "keep_alive": "10m",
+        "options": {"temperature": 0.1, "num_predict": 600},
     }
     try:
         resp = httpx.post(f"{settings.summarizer_host.rstrip('/')}/api/generate",

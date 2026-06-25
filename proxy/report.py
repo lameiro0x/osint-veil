@@ -48,6 +48,22 @@ def build_report(store: CaseStore, case: CaseConfig, *, analysis: str = "",
     lines.append(text or "_(sin análisis)_")
     lines.append("")
 
+    # Inventario de activos descubiertos, agrupado por tipo y legible. Es lo que
+    # el operador quiere ver de un vistazo (subdominios, IPs, URLs, emails…).
+    by_type: dict[str, list[str]] = {}
+    for token in store.mappings:
+        ttype = store.meta.get(token, {}).get("type", "OTRO")
+        value = store.mappings[token] if rehydrate else token
+        by_type.setdefault(ttype, []).append(value)
+    if by_type:
+        lines.append("## Activos descubiertos\n")
+        for ttype in sorted(by_type):
+            valores = sorted(set(by_type[ttype]))
+            lines.append(f"### {ttype} ({len(valores)})")
+            for v in valores:
+                lines.append(f"- `{v}`")
+            lines.append("")
+
     secrets = store.read_secrets()
     if secrets:
         lines.append("## Secretos encontrados (LOCAL — nunca enviados a Claude)\n")

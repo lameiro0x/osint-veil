@@ -46,6 +46,22 @@ def test_fail_safe_si_ollama_cae(monkeypatch):
     assert summ.summarize("SUBDOMAIN_001 " * 50, _settings()) is None  # no rompe
 
 
+def test_entrada_se_trunca_al_maximo(monkeypatch):
+    captured = {}
+
+    def fake_post(*a, **k):
+        captured["json"] = k.get("json")
+        return _Resp({"response": "resumen"})
+
+    monkeypatch.setattr(summ.httpx, "post", fake_post)
+    s = _settings(summarizer_max_chars=500)
+    summ.summarize("SUBDOMAIN_001 " * 1000, s)  # entrada enorme
+    prompt = captured["json"]["prompt"]
+    assert "entrada truncada" in prompt
+    assert len(prompt) < 2000  # se acotó (no se mandó todo)
+    assert captured["json"]["keep_alive"] == "10m"
+
+
 def test_resumen_se_limpia_de_secretos(monkeypatch):
     leak = "ghp_" + "a" * 30
     monkeypatch.setattr(summ.httpx, "post",

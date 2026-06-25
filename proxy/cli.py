@@ -115,6 +115,10 @@ def _cmd_audit(args) -> int:
     with open(out, "w", encoding="utf-8") as f:
         f.write(report)
 
+    # Inventario de activos descubiertos (valores reales, LOCAL) — lo que el
+    # operador quiere ver de un vistazo.
+    _print_assets(store)
+
     if result.final_text:
         analysis = store.rehydrate(result.final_text)
         try:
@@ -123,8 +127,34 @@ def _cmd_audit(args) -> int:
         except Exception:  # noqa: BLE001 — markdown malformado: fallback a texto plano
             console.print(Panel(analysis,
                                 title="Análisis (rehidratado · LOCAL)", border_style=C_DIM))
-    console.print(f"[{C_OK}]✔[/] Informe (rehidratado, LOCAL) → [bold]{out}[/]")
+    else:
+        console.print("[yellow]No hubo análisis final (revisa la API key / presupuesto).[/]")
+
+    console.print(f"\n[{C_OK}]✔[/] Informe completo y legible (rehidratado, LOCAL) → "
+                  f"[bold]{out}[/]")
+    console.print(f"[{C_DIM}]  Ábrelo con:  cat {out}   ·   o regenéralo: "
+                  f"osint-veil report --case {args.case}[/]")
     return 0
+
+
+def _print_assets(store: CaseStore) -> None:
+    """Tabla de activos descubiertos agrupados por tipo (valores reales, LOCAL)."""
+    by_type: dict[str, list[str]] = {}
+    for token, real in store.mappings.items():
+        ttype = store.meta.get(token, {}).get("type", "OTRO")
+        by_type.setdefault(ttype, []).append(real)
+    if not by_type:
+        return
+    t = Table(title="Activos descubiertos (valores reales · LOCAL)", title_style="bold",
+              show_lines=False)
+    t.add_column("Tipo", style=C_ACCENT, overflow="fold")
+    t.add_column("Nº", justify="right")
+    t.add_column("Valores", overflow="fold")
+    for ttype in sorted(by_type):
+        vals = sorted(set(by_type[ttype]))
+        shown = ", ".join(vals[:8]) + (f"  (+{len(vals) - 8} más)" if len(vals) > 8 else "")
+        t.add_row(ttype, str(len(vals)), shown)
+    console.print(t)
 
 
 def _cmd_report(args) -> int:
@@ -207,7 +237,7 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--case", required=True)
     a.add_argument("--target", required=True)
     a.add_argument("--scope", nargs="*", help="Dominios extra dentro de alcance")
-    a.add_argument("--max-iter", type=int, default=12)
+    a.add_argument("--max-iter", type=int, default=20)
     a.add_argument("--allow-active", action="store_true",
                    help="Habilita herramientas activas/intrusivas (nmap, amass -active)")
     a.add_argument("--report")

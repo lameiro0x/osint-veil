@@ -42,6 +42,7 @@ class Settings:
     summarizer_model: str = "llama3.2"
     summarizer_host: str = "http://127.0.0.1:11434"
     summarizer_min_chars: int = 1500  # solo resume salidas grandes
+    summarizer_max_chars: int = 6000  # trunca la entrada al resumidor (CPU rápido)
 
 
 @dataclass
@@ -84,6 +85,7 @@ def get_settings() -> Settings:
         summarizer_model=os.getenv("PROXY_SUMMARIZER_MODEL", "llama3.2").strip(),
         summarizer_host=os.getenv("PROXY_SUMMARIZER_HOST", "http://127.0.0.1:11434").strip(),
         summarizer_min_chars=int(os.getenv("PROXY_SUMMARIZER_MIN_CHARS", "1500")),
+        summarizer_max_chars=int(os.getenv("PROXY_SUMMARIZER_MAX_CHARS", "6000")),
     )
 
 

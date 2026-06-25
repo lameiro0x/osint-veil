@@ -119,6 +119,26 @@ def test_budget_corta_el_loop():
     assert len(record) == 3
 
 
+class BudgetThenFinalClient:
+    """Pide tool mientras hay 'tools'; al cierre (tools=None) entrega el informe."""
+
+    def run_turn(self, *, system, messages, tools, model=None, max_tokens=4000):
+        if tools:
+            return {"content": [{"type": "tool_use", "id": "t", "name": "recon",
+                                 "input": {"host": "vpn.cliente.com"}}],
+                    "stop_reason": "tool_use", "usage": {"input_tokens": 5, "output_tokens": 5}}
+        return {"content": [{"type": "text", "text": "Informe final: SUBDOMAIN_001 relevante."}],
+                "stop_reason": "end_turn", "usage": {"input_tokens": 3, "output_tokens": 3}}
+
+
+def test_budget_garantiza_analisis_final():
+    """Al agotar el presupuesto, hay UNA llamada sin tools que SIEMPRE da informe."""
+    orch, store, _ = _setup(BudgetThenFinalClient(), budget=Budget(max_iterations=2))
+    result = orch.run()
+    assert result.stop_reason == "max_iterations"
+    assert "Informe final" in result.final_text  # no se queda en "(sin análisis)"
+
+
 def test_balanced_tokeniza_subdominios_descubiertos():
     """En modo balanced, los subdominios del target descubiertos se tokenizan."""
     from dataclasses import replace as _replace
