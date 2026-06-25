@@ -43,6 +43,8 @@ def build_report(store: CaseStore, case: CaseConfig, *, analysis: str = "",
     lines.append(f"- Hallazgos crudos guardados: **{len(store.read_findings())}**")
     lines.append("")
 
+    # Si no se pasa análisis explícito, recupera el persistido del último audit.
+    analysis = analysis or store.read_analysis()
     lines.append("## Análisis de Claude\n")
     text = store.rehydrate(analysis) if (rehydrate and analysis) else analysis
     lines.append(text or "_(sin análisis)_")
@@ -81,6 +83,22 @@ def build_report(store: CaseStore, case: CaseConfig, *, analysis: str = "",
                 else item["token"]
             lines.append(f"- **{label}** — {item['hint']}")
         lines.append("")
+
+    # Detalle crudo por herramienta (puertos, headers, whois, subdominios…),
+    # rehidratado en local. Es la evidencia completa de lo que se descubrió.
+    findings = store.read_findings()
+    if findings:
+        lines.append("## Detalle por herramienta (evidencia)\n")
+        for f in findings:
+            body = f.get("text", "")
+            body = store.rehydrate(body) if rehydrate else body
+            if len(body) > 4000:
+                body = body[:4000] + "\n[...truncado en el informe...]"
+            lines.append(f"### {f.get('tool', '?')}")
+            lines.append("```")
+            lines.append(body.strip() or "(sin salida)")
+            lines.append("```")
+            lines.append("")
 
     if total_censored:
         lines.append("## Privacidad — qué se censuró (sin valores reales)\n")

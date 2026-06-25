@@ -15,6 +15,9 @@ Versionado [SemVer](https://semver.org/lang/es/).
   devuelve 400 (configura el cliente con `stream=false`).
 
 ### Corregido
+- **`osint-veil report` ya no borra el análisis**: el análisis final se **persiste**
+  en el vault (cifrado) al terminar el audit, así regenerar el informe lo recupera
+  (antes lo reescribía como "(sin análisis)").
 - **El OSINT ya no se corta sin análisis**: el summarizer en CPU podía tardar más que
   su timeout y **agotar el presupuesto de tiempo**, dejando el informe en
   "(sin análisis)". Ahora: (1) la entrada al summarizer se **trunca**
@@ -24,9 +27,15 @@ Versionado [SemVer](https://semver.org/lang/es/).
   llamada sin herramientas que SIEMPRE entrega el informe.
 
 ### Cambiado
-- **Informe más legible**: nueva sección **"Activos descubiertos"** que agrupa los
-  hallazgos por tipo (subdominios, IPs, URLs, emails…) con sus valores reales (en
-  local). La CLI `audit` también imprime una tabla-resumen de activos al terminar.
+- **Informe más legible y completo**: sección **"Activos descubiertos"** (agrupa por
+  tipo con valores reales en local) + **"Detalle por herramienta"** (evidencia cruda
+  rehidratada: puertos, headers, whois, subdominios…). La CLI `audit` imprime una
+  tabla-resumen de activos al terminar.
+- **Análisis más accionable**: el prompt pide ser exhaustivo (encadena hallazgos,
+  usa todas las herramientas) y estructura el informe por secciones con
+  **Hallazgo · Impacto · Siguientes pasos** y resumen ejecutivo.
+- **`osint-veil audit --model`**: elige el modelo de Claude por auditoría
+  (p.ej. `--model claude-sonnet-4-6`) sin tocar el `.env`.
 - **`setup.sh` guiado y completo**: `--all` ahora instala TODO incluido **Docker** y
   **Ollama + modelo** (pull), **preguntando antes de cada pieza pesada** con sus
   alternativas explicadas. Nuevo `--yes/-y` (desatendido). Instalación de Ollama

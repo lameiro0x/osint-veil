@@ -59,11 +59,13 @@ def _cmd_audit(args) -> int:
     tools = builtin_tools() + external_tools(allow_active=args.allow_active)
     gateway = ToolGateway(scope_domains=[args.target] + (args.scope or []), tools=tools)
     budget = Budget(max_iterations=args.max_iter)
+    model = args.model or case.model or settings.anthropic_model
 
     console.print(Panel.fit(
         f"[bold]Objetivo:[/] {args.target}\n"
         f"[bold]Caso:[/] {args.case}    [bold]Modo:[/] {case.mode}\n"
         f"[bold]Herramientas:[/] {', '.join(gateway.tool_names())}\n"
+        f"[bold]Modelo:[/] {model}\n"
         f"[bold]Límites:[/] {budget.max_iterations} iter · "
         f"{budget.max_total_tokens} tokens · {budget.max_seconds:.0f}s"
         + ("    [red](herramientas activas habilitadas)[/]" if args.allow_active else ""),
@@ -79,7 +81,7 @@ def _cmd_audit(args) -> int:
             console.print(f"   {mark} [{C_ACCENT}]{ev.get('tool')}[/]")
 
     orch = Orchestrator(client=ClaudeClient(settings), gateway=gateway, store=store,
-                        case=case, target=args.target, budget=budget, model=case.model,
+                        case=case, target=args.target, budget=budget, model=model,
                         progress=progress)
     try:
         with console.status("[bold green]Claude trabajando…", spinner="dots"):
@@ -90,6 +92,7 @@ def _cmd_audit(args) -> int:
 
     store.write_audit(type_counts=result.type_counts, provider=case.provider,
                       mode=case.mode, dry_run=False, note=f"audit stop={result.stop_reason}")
+    store.save_analysis(result.final_text)  # persiste el análisis para 'report'
 
     if result.stop_reason == "api_error":
         err.print(Panel.fit(f"[red]Error de la API de Claude:[/]\n{result.error}",
@@ -238,6 +241,8 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--target", required=True)
     a.add_argument("--scope", nargs="*", help="Dominios extra dentro de alcance")
     a.add_argument("--max-iter", type=int, default=20)
+    a.add_argument("--model", help="Modelo de Claude para esta auditoría "
+                   "(p.ej. claude-sonnet-4-6 o claude-opus-4-8). Por defecto, el del .env)")
     a.add_argument("--allow-active", action="store_true",
                    help="Habilita herramientas activas/intrusivas (nmap, amass -active)")
     a.add_argument("--report")

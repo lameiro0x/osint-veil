@@ -55,6 +55,7 @@ class CaseStore:
         self._audit_path = self._dir / "audit-log.json"
         self._findings_path = self._dir / "findings.json"
         self._secrets_path = self._dir / "secrets.json"
+        self._analysis_path = self._dir / "analysis.json"
 
         self._fernet: Fernet | None = None
         if settings.encryption_key:
@@ -210,6 +211,26 @@ class CaseStore:
             return json.loads(blob.decode("utf-8"))
         except json.JSONDecodeError:
             return []
+
+    def save_analysis(self, text: str) -> None:
+        """Persiste el análisis final de Claude (en TOKENS) para regenerar el informe.
+
+        El texto está tokenizado (Claude solo conoce tokens). Se cifra como el resto.
+        """
+        self._write_blob(
+            self._analysis_path,
+            json.dumps({"timestamp": _now(), "analysis": text or ""},
+                       ensure_ascii=False, indent=2).encode("utf-8"),
+        )
+
+    def read_analysis(self) -> str:
+        blob = self._read_blob(self._analysis_path)
+        if not blob:
+            return ""
+        try:
+            return json.loads(blob.decode("utf-8")).get("analysis", "")
+        except json.JSONDecodeError:
+            return ""
 
     # ── Vault de SECRETOS (opt-in, cifrado obligatorio, jamás a Claude) ──
     @property

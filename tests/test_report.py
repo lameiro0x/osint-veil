@@ -45,6 +45,25 @@ def test_report_anonimo_no_rehidrata():
     assert "vpn-corp-backup.cliente.com" not in md
 
 
+def test_analisis_persiste_y_se_recupera_en_report():
+    """save_analysis + build_report sin pasar analysis lo recupera (no '(sin análisis)')."""
+    store, case = _populated_store()
+    store.save_analysis("Informe: SUBDOMAIN_001 es alta prioridad.")
+    md = build_report(store, case, analysis="", rehydrate=True)
+    assert "alta prioridad" in md
+    assert "_(sin análisis)_" not in md
+
+
+def test_report_detalle_por_herramienta():
+    """El informe incluye la evidencia cruda por herramienta (rehidratada en local)."""
+    store, case = _populated_store()
+    store.add_finding("nmap", "puerto 443/tcp open en mail.cliente.com")
+    md = build_report(store, case, analysis="x", rehydrate=True)
+    assert "Detalle por herramienta" in md
+    assert "nmap" in md
+    assert "443/tcp open" in md
+
+
 def test_review_queue_alta_relevancia():
     store, _ = _populated_store()
     items = review_queue(store)
